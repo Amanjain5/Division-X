@@ -1,0 +1,9 @@
+﻿name: Preview
+on:
+  pull_request:
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Hook preview deployment provider here'
+

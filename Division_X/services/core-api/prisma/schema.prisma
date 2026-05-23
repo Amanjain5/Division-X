@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime          @default(now())
+  memberships  WorkspaceMember[]
+  sessions     Session[]
+  tasks        Task[]
+  attendance   AttendanceLog[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  workspaceId  String
+  role         Role
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+  @@index([userId, workspaceId])
+}
+
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  timezone  String            @default("UTC")
+  createdAt DateTime          @default(now())
+  members   WorkspaceMember[]
+  teams     Team[]
+  projects  Project[]
+  tasks     Task[]
+  tags      Tag[]
+  clients   Client[]
+  entries   TimeEntry[]
+  timers    RunningTimer[]
+  breaks    BreakSession[]
+  policies  WorkspacePolicy[]
+  invites      Invite[]
+  audits       AuditLog[]
+  attendance   AttendanceLog[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role      @default(MEMBER)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  @@unique([workspaceId, userId])
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  email       String
+  role        Role      @default(MEMBER)
+  token       String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  @@index([workspaceId, email])
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime     @default(now())
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  members     TeamMember[]
+  @@index([workspaceId])
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  teamId String
+  userId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  @@unique([teamId, userId])
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  workspaceId String
+  clientId    String?
+  name        String
+  color       String    @default("#059669")
+  archived    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  client      Client?   @relation(fields: [clientId], references: [id])
+  entries     TimeEntry[]
+  @@index([workspaceId])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  projectId   String?
+  name        String
+  status      String    @default("To Do")
+  priority    String    @default("Low")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+  entries     TimeEntry[]
+  @@index([workspaceId])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String    @default("#6B7280")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  @@index([workspaceId])
+}
+
+model Client {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  email       String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  projects    Project[]
+  @@index([workspaceId])
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  projectId   String?
+  taskId      String?
+  tagId       String?
+  description String
+  startedAt   DateTime
+  endedAt     DateTime?
+  billable    Boolean   @default(false)
+  approved    Boolean   @default(false)
+  invoiced    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  project     Project?  @relation(fields: [projectId], references: [id])
+  task        Task?     @relation(fields: [taskId], references: [id])
+  @@index([workspaceId, userId, startedAt])
+  @@index([workspaceId, projectId])
+}
+
+model RunningTimer {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String    @unique
+  entryId     String    @unique
+  startedAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  @@index([workspaceId, userId])
+}
+
+model BreakSession {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  @@index([workspaceId, userId, startedAt])
+}
+
+model WorkspacePolicy {
+  id                 String    @id @default(cuid())
+  workspaceId        String    @unique
+  forceTimer         Boolean   @default(false)
+  idleMinutes        Int       @default(10)
+  overtimeHours      Int       @default(8)
+  pomodoroMinutes    Int       @default(25)
+  breakMinutes       Int       @default(5)
+  longRunningMinutes Int       @default(480)
+  reminderEnabled    Boolean   @default(true)
+  weekStartDay       Int       @default(1)
+  workspace          Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actorUserId String
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  @@index([workspaceId, createdAt])
+}
+
+model AttendanceLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  date        DateTime  @db.Date
+  clockInAt   DateTime
+  clockOutAt  DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  @@unique([workspaceId, userId, date])
+}

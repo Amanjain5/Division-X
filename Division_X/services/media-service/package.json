@@ -1,0 +1,1 @@
+{"name":"@divisionx/media-service","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"node src/main.ts","lint":"echo lint media-service","typecheck":"tsc -p tsconfig.json --noEmit","test":"echo test media-service","build":"tsc -p tsconfig.json"}}

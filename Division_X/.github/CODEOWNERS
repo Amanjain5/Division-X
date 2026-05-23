@@ -1,0 +1,5 @@
+﻿* @divisionx/platform-team
+/apps/happywedding-web/ @divisionx/web-team
+/services/core-api/ @divisionx/backend-team
+/packages/contracts/ @divisionx/architecture-team
+

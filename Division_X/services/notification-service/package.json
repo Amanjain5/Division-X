@@ -1,0 +1,1 @@
+{"name":"@divisionx/notification-service","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"node src/main.ts","lint":"echo lint notification-service","typecheck":"tsc -p tsconfig.json --noEmit","test":"echo test notification-service","build":"tsc -p tsconfig.json"}}

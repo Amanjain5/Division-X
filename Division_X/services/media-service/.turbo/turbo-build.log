@@ -1,0 +1,4 @@
+
+> @divisionx/media-service@0.1.0 build D:\Division X\Division_X\services\media-service
+> tsc -p tsconfig.json
+

@@ -1,0 +1,4 @@
+
+> @divisionx/utils@0.1.0 build D:\Division X\Division_X\packages\utils
+> tsc -p tsconfig.json
+

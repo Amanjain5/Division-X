@@ -1,0 +1,4 @@
+
+> @divisionx/core-api@0.1.0 build D:\Division X\Division_X\services\core-api
+> tsc -p tsconfig.json
+

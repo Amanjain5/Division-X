@@ -1,0 +1,4 @@
+
+> @divisionx/contracts@0.1.0 build D:\Division X\Division_X\packages\contracts
+> tsc -p tsconfig.json
+

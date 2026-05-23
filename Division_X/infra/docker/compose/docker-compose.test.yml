@@ -1,0 +1,4 @@
+﻿services:
+  core-api-test:
+    image: node:22-alpine
+

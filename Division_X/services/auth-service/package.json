@@ -1,0 +1,13 @@
+{
+    "name": "@divisionx/auth-service",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "node src/main.ts",
+        "lint": "echo lint auth-service",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "echo test auth-service",
+        "build": "tsc -p tsconfig.json"
+    }
+}

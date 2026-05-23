@@ -1,0 +1,4 @@
+
+> @divisionx/types@0.1.0 build D:\Division X\Division_X\packages\types
+> tsc -p tsconfig.json
+
