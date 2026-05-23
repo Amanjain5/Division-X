@@ -3,6 +3,7 @@ import { json, readJson } from '../../core/http.js';
 import type { RequestContext } from '../../core/types.js';
 import { hasRole } from '../../core/types.js';
 import { writeAudit } from '../../core/audit.js';
+import { sendGlobalNotification } from '../../core/notifications.js';
 
 async function getPolicy(workspaceId: string) {
   return prisma.workspacePolicy.findFirst({ where: { workspaceId } });
@@ -25,6 +26,7 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
     const entry = await prisma.timeEntry.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, projectId: body.projectId || null, taskId: body.taskId || null, tagId: body.tagId || null, description: body.description || 'Untitled work', startedAt, billable: Boolean(body.billable) } });
     await prisma.runningTimer.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, entryId: entry.id, startedAt } }).catch(() => {/* ignore duplicate */});
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'timer.start', targetType: 'time_entry', targetId: entry.id });
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Timer Started', `Started tracking task: "${entry.description}"`);
     return json({ running: true, entry });
   }
 
@@ -34,6 +36,7 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
     const entry = await prisma.timeEntry.update({ where: { id: last.id }, data: { endedAt: new Date() } });
     await prisma.runningTimer.deleteMany({ where: { userId: ctx.userId } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'timer.stop', targetType: 'time_entry', targetId: entry.id });
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Timer Stopped', `Stopped active task: "${entry.description}"`);
     return json({ running: false, entry });
   }
 
@@ -53,6 +56,7 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
     const entry = await prisma.timeEntry.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, projectId: original.projectId, taskId: original.taskId, tagId: original.tagId, description: original.description, startedAt, billable: original.billable } });
     await prisma.runningTimer.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, entryId: entry.id, startedAt } }).catch(() => {});
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'timer.resume', targetType: 'time_entry', targetId: entry.id, metadata: { resumedFrom: body.entryId } });
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Timer Started', `Started tracking task: "${entry.description}"`);
     return json({ running: true, entry });
   }
 
@@ -173,10 +177,13 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
     const projectId = url.searchParams.get('projectId');
+    const userId = url.searchParams.get('userId');
     const skip = (page - 1) * pageSize;
     const where: any = {
       workspaceId: ctx.workspaceId,
-      userId: ctx.userId,
+      ...(hasRole(ctx.role, ['OWNER', 'ADMIN', 'MANAGER'])
+        ? (userId ? { userId } : {})
+        : { userId: ctx.userId }),
       ...(projectId ? { projectId } : {}),
       ...(from || to ? { startedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {})
     };

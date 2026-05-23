@@ -1,7 +1,9 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../core/prisma.js';
 import { json, readJson } from '../../core/http.js';
 import { generateRefreshToken, signAccessToken } from '../../core/auth.js';
+import { sendPasswordResetEmail } from '../../core/mail.js';
 
 async function issueSession(userId: string, workspaceId: string, role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER') {
   const refreshToken = generateRefreshToken();
@@ -19,30 +21,40 @@ export async function authRoutes(req: Request): Promise<Response | null> {
     if (!body.email || !body.password || !body.workspaceName) return json({ error: 'invalid_payload' }, 400);
 
     const passwordHash = await bcrypt.hash(body.password, 10);
-    const created = await prisma.workspace.create({
-      data: {
-        name: body.workspaceName,
-        members: {
-          create: {
-            role: 'OWNER',
-            user: { create: { email: body.email, passwordHash, name: body.name } }
-          }
+    try {
+      const created = await prisma.workspace.create({
+        data: {
+          name: body.workspaceName,
+          members: {
+            create: {
+              role: 'OWNER',
+              user: { create: { email: body.email, passwordHash, name: body.name } }
+            }
+          },
+          policies: { create: { forceTimer: false, idleMinutes: 10, overtimeHours: 8 } }
         },
-        policies: { create: { forceTimer: false, idleMinutes: 10, overtimeHours: 8 } }
-      },
-      include: { members: { include: { user: true } } }
-    });
+        include: { members: { include: { user: true } } }
+      });
 
-    const member = created.members[0];
-    const session = await issueSession(member.userId, created.id, member.role);
-    return json({ ...session, userId: member.userId, workspaceId: created.id, role: member.role, email: body.email }, 201);
+      const member = created.members[0];
+      const session = await issueSession(member.userId, created.id, member.role);
+      return json({ ...session, userId: member.userId, workspaceId: created.id, role: member.role, email: body.email }, 201);
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        return json({ error: 'email_already_exists' }, 400);
+      }
+      throw err;
+    }
   }
 
   if (req.method === 'POST' && url.pathname === '/v1/auth/login') {
     const body = (await readJson(req)) as { email?: string; password?: string };
     if (!body.email || !body.password) return json({ error: 'invalid_payload' }, 400);
 
-    const user = await prisma.user.findUnique({ where: { email: body.email }, include: { memberships: true } });
+    const user = await prisma.user.findUnique({
+      where: { email: body.email },
+      include: { memberships: { include: { workspace: true } } }
+    });
     if (!user) return json({ error: 'invalid_credentials' }, 401);
 
     const ok = await bcrypt.compare(body.password, user.passwordHash);
@@ -50,7 +62,39 @@ export async function authRoutes(req: Request): Promise<Response | null> {
 
     const membership = user.memberships[0];
     const session = await issueSession(user.id, membership.workspaceId, membership.role);
-    return json({ ...session, userId: user.id, workspaceId: membership.workspaceId, role: membership.role, email: user.email });
+    const workspaces = user.memberships.map((m: any) => ({
+      id: m.workspaceId,
+      name: m.workspace.name,
+      role: m.role
+    }));
+    return json({
+      ...session,
+      userId: user.id,
+      workspaceId: membership.workspaceId,
+      role: membership.role,
+      email: user.email,
+      workspaces
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/auth/switch') {
+    const body = (await readJson(req)) as { workspaceId?: string; userId?: string };
+    const userId = body.userId || (req.headers.get('x-user-id') || undefined);
+    if (!body.workspaceId || !userId) return json({ error: 'invalid_payload' }, 400);
+
+    const membership = await prisma.workspaceMember.findFirst({
+      where: { userId, workspaceId: body.workspaceId },
+      include: { workspace: true }
+    });
+    if (!membership) return json({ error: 'forbidden' }, 403);
+
+    const session = await issueSession(userId, membership.workspaceId, membership.role);
+    return json({
+      ...session,
+      userId,
+      workspaceId: membership.workspaceId,
+      role: membership.role
+    });
   }
 
   if (req.method === 'POST' && url.pathname === '/v1/auth/refresh') {
@@ -64,6 +108,52 @@ export async function authRoutes(req: Request): Promise<Response | null> {
     return json({ token });
   }
 
-  if (req.method === 'POST' && url.pathname === '/v1/auth/forgot-password') return json({ success: true });
+  if (req.method === 'POST' && url.pathname === '/v1/auth/forgot-password') {
+    const body = (await readJson(req)) as { email?: string };
+    if (!body.email) return json({ error: 'invalid_payload' }, 400);
+
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    if (!user) {
+      // Return success to prevent email enumeration attacks
+      return json({ success: true });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour expiration
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { resetToken: token, resetTokenExpires: expires }
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetLink = `${frontendUrl}/auth/reset-password?token=${token}`;
+
+    sendPasswordResetEmail(user.email, user.name || '', resetLink).catch((err) => {
+      console.error('❌ Failed to dispatch password reset email:', err);
+    });
+
+    return json({ success: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/auth/reset-password') {
+    const body = (await readJson(req)) as { token?: string; password?: string };
+    if (!body.token || !body.password || body.password.length < 6) {
+      return json({ error: 'invalid_payload' }, 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { resetToken: body.token } });
+    if (!user || !user.resetTokenExpires || user.resetTokenExpires.getTime() < Date.now()) {
+      return json({ error: 'invalid_or_expired_token' }, 400);
+    }
+
+    const passwordHash = await bcrypt.hash(body.password, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, resetToken: null, resetTokenExpires: null }
+    });
+
+    return json({ success: true });
+  }
+
   return null;
 }

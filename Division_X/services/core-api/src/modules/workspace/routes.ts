@@ -4,6 +4,7 @@ import { json, readJson } from '../../core/http.js';
 import type { RequestContext } from '../../core/types.js';
 import { hasRole } from '../../core/types.js';
 import { writeAudit } from '../../core/audit.js';
+import { sendInviteEmail } from '../../core/mail.js';
 
 export async function workspaceRoutes(req: Request, ctx: RequestContext): Promise<Response | null> {
   const url = new URL(req.url);
@@ -84,18 +85,47 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     if (!hasRole(ctx.role, ['OWNER', 'ADMIN'])) return json({ error: 'forbidden' }, 403);
     const body = (await readJson(req)) as { email?: string; role?: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' };
     if (!body.email) return json({ error: 'invalid_payload' }, 400);
+
+    // Verify if user is already a workspace member
+    const existingMember = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: ctx.workspaceId,
+        user: { email: body.email }
+      }
+    });
+    if (existingMember) {
+      return json({ error: 'user_already_member' }, 400);
+    }
+
     const token = crypto.randomBytes(20).toString('hex');
     const invite = await prisma.invite.create({
       data: { workspaceId: ctx.workspaceId, email: body.email, role: body.role || 'MEMBER', token, expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) }
     });
+
+    // Resolve workspace name and dispatch invitation email asynchronously
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: ctx.workspaceId },
+      select: { name: true }
+    });
+    const workspaceName = workspace?.name || 'Your Workspace';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const inviteLink = `${frontendUrl}/auth/accept-invite?token=${token}`;
+
+    sendInviteEmail(body.email, workspaceName, inviteLink).catch((err) => {
+      console.error('❌ Failed to dispatch invitation email:', err);
+    });
+
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'invite.create', targetType: 'invite', targetId: invite.id, metadata: { email: body.email, role: body.role } });
     return json({ inviteId: invite.id, token: invite.token, workspaceId: ctx.workspaceId, email: invite.email, role: invite.role }, 201);
   }
 
-  if (req.method === 'DELETE' && url.pathname.startsWith('/v1/workspace/invites/') && url.pathname !== '/v1/workspace/invites/accept') {
+  if (req.method === 'DELETE' && url.pathname.startsWith('/v1/workspace/invites/')) {
     if (!hasRole(ctx.role, ['OWNER', 'ADMIN'])) return json({ error: 'forbidden' }, 403);
     const inviteId = url.pathname.split('/').pop()!;
-    await prisma.invite.delete({ where: { id: inviteId } }).catch(() => {});
+    const invite = await prisma.invite.findFirst({ where: { id: inviteId, workspaceId: ctx.workspaceId } });
+    if (!invite) return json({ error: 'not_found' }, 404);
+    await prisma.invite.delete({ where: { id: inviteId } });
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'invite.revoke', targetType: 'invite', targetId: inviteId, metadata: { email: invite.email } });
     return json({ deleted: true });
   }
 
@@ -116,6 +146,7 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
       update: { role: invite.role }
     });
     await prisma.invite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+    await writeAudit({ workspaceId: invite.workspaceId, actorUserId: user.id, action: 'invite.accept', targetType: 'invite', targetId: invite.id, metadata: { email: invite.email } });
     return json({ accepted: true, workspaceId: invite.workspaceId, role: invite.role });
   }
 
@@ -139,6 +170,7 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     const teamId = url.pathname.split('/').pop()!;
     const body = (await readJson(req)) as { name?: string };
     const team = await prisma.team.update({ where: { id: teamId }, data: { ...(body.name ? { name: body.name } : {}) } });
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'team.update', targetType: 'team', targetId: teamId, metadata: body });
     return json({ team });
   }
 
@@ -146,6 +178,7 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     if (!hasRole(ctx.role, ['OWNER', 'ADMIN'])) return json({ error: 'forbidden' }, 403);
     const teamId = url.pathname.split('/').pop()!;
     await prisma.team.delete({ where: { id: teamId } });
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'team.delete', targetType: 'team', targetId: teamId });
     return json({ deleted: true });
   }
 
@@ -156,6 +189,9 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     const body = (await readJson(req)) as { userId?: string };
     if (!body.userId) return json({ error: 'invalid_payload' }, 400);
     const member = await prisma.teamMember.create({ data: { teamId, userId: body.userId } }).catch(() => null);
+    if (member) {
+      await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'team.member_add', targetType: 'team', targetId: teamId, metadata: { userId: body.userId } });
+    }
     return json({ member: member || { teamId, userId: body.userId } }, 201);
   }
 
@@ -165,6 +201,7 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     const teamId = parts[3];
     const userId = parts[5];
     await prisma.teamMember.deleteMany({ where: { teamId, userId } });
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'team.member_remove', targetType: 'team', targetId: teamId, metadata: { userId } });
     return json({ removed: true });
   }
 

@@ -1,0 +1,4 @@
+
+> @divisionx/forms@0.1.0 typecheck D:\Division X\Division_X\packages\forms
+> tsc -p tsconfig.json --noEmit
+

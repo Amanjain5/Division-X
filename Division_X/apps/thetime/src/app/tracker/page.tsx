@@ -6,7 +6,7 @@ import { Toast } from '../../components/toast';
 import {
   getTimeEntries, startTimer, stopTimer,
   getRunningTimer, getCatalog, createCatalog, updateCatalog, getCurrentRole, startBreak, stopBreak,
-  startPomodoro, getTimerAlerts, getPolicies
+  startPomodoro, getTimerAlerts, getPolicies, reportIdle
 } from '@divisionx/api-client';
 import { requestNotificationPermission, notifyCritical } from '../../components/notification-manager';
 
@@ -67,8 +67,9 @@ export default function TrackerPage() {
 
   const refresh = useCallback(async () => {
     try {
+      const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('thetime_user_id') || undefined : undefined;
       const [entries, timer, proj, tks] = await Promise.all([
-        getTimeEntries({ pageSize: 200 }),
+        getTimeEntries({ pageSize: 200, userId: currentUserId }),
         getRunningTimer(),
         getCatalog('projects'),
         getCatalog('tasks')
@@ -164,6 +165,7 @@ export default function TrackerPage() {
         idleRef.current = setTimeout(() => {
           setIdleAlert(true);
           notifyCritical('TheTime — Idle Detected', `You've been inactive for ${idleMinutes} minutes while the timer is running.`, 'idle');
+          reportIdle().catch(() => {});
         }, idleMinutes * 60 * 1000);
       }
     }

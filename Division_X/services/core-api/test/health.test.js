@@ -1,1 +1,8 @@
-﻿import test from 'node:test';\nimport assert from 'node:assert/strict';\n\ntest('health contract shape', async () => {\n  const payload = { status: 'ok', service: 'core-api' };\n  assert.equal(payload.status, 'ok');\n  assert.equal(typeof payload.service, 'string');\n});\n
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+test('health contract shape', async () => {
+  const payload = { status: 'ok', service: 'core-api' };
+  assert.equal(payload.status, 'ok');
+  assert.equal(typeof payload.service, 'string');
+});

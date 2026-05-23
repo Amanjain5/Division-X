@@ -15,15 +15,17 @@ enum Role {
 }
 
 model User {
-  id           String            @id @default(cuid())
-  email        String            @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime          @default(now())
-  memberships  WorkspaceMember[]
-  sessions     Session[]
-  tasks        Task[]
-  attendance   AttendanceLog[]
+  id                String            @id @default(cuid())
+  email             String            @unique
+  passwordHash      String
+  name              String?
+  resetToken        String?           @unique
+  resetTokenExpires DateTime?
+  createdAt         DateTime          @default(now())
+  memberships       WorkspaceMember[]
+  sessions          Session[]
+  tasks             Task[]
+  attendance        AttendanceLog[]
 }
 
 model Session {
@@ -39,20 +41,21 @@ model Session {
 }
 
 model Workspace {
-  id        String            @id @default(cuid())
-  name      String
-  timezone  String            @default("UTC")
-  createdAt DateTime          @default(now())
-  members   WorkspaceMember[]
-  teams     Team[]
-  projects  Project[]
-  tasks     Task[]
-  tags      Tag[]
-  clients   Client[]
-  entries   TimeEntry[]
-  timers    RunningTimer[]
-  breaks    BreakSession[]
-  policies  WorkspacePolicy[]
+  id           String            @id @default(cuid())
+  name         String
+  timezone     String            @default("UTC")
+  customDomain String?           @unique
+  createdAt    DateTime          @default(now())
+  members      WorkspaceMember[]
+  teams        Team[]
+  projects     Project[]
+  tasks        Task[]
+  tags         Tag[]
+  clients      Client[]
+  entries      TimeEntry[]
+  timers       RunningTimer[]
+  breaks       BreakSession[]
+  policies     WorkspacePolicy[]
   invites      Invite[]
   audits       AuditLog[]
   attendance   AttendanceLog[]

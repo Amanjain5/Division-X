@@ -1,1 +1,7 @@
-﻿import test from 'node:test';\nimport assert from 'node:assert/strict';\n\ntest('contract namespace remains v1 compatible', () => {\n  const namespace = 'v1';\n  assert.equal(namespace, 'v1');\n});\n
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+test('contract namespace remains v1 compatible', () => {
+  const namespace = 'v1';
+  assert.equal(namespace, 'v1');
+});

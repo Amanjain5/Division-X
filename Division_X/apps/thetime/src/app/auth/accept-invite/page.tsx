@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { acceptInvite } from '@divisionx/api-client';
+import { acceptInvite, clearAuth } from '@divisionx/api-client';
 
 export default function AcceptInvitePage() {
   const router = useRouter();
@@ -17,7 +17,11 @@ export default function AcceptInvitePage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!token) setError('Invalid invite link. Please check the URL.');
+    if (!token) {
+      setError('Invalid invite link. Please check the URL.');
+    } else {
+      clearAuth(); // Flush any existing owner/user credentials to prevent session leak
+    }
   }, [token]);
 
   async function onSubmit(e: React.FormEvent) {

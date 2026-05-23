@@ -1,21 +1,7 @@
-import type { RequestContext, Role } from './types.js';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { verifyAccessToken } from './auth.js';
-
-export function getContext(req: Request): RequestContext {
-  const auth = req.headers.get('authorization');
-  if (auth?.startsWith('Bearer ')) {
-    const claims = verifyAccessToken(auth.slice(7));
-    if (claims) {
-      return { userId: claims.sub, workspaceId: claims.workspaceId, role: claims.role };
-    }
-  }
-
-  return {
-    userId: req.headers.get('x-user-id') || 'demo-user',
-    workspaceId: req.headers.get('x-workspace-id') || 'demo-workspace',
-    role: (req.headers.get('x-role') as Role) || 'OWNER'
-  };
-}
+import { prisma } from './prisma.js';
+import type { Role } from './types.js';
 
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -32,4 +18,57 @@ export async function readJson(req: Request): Promise<unknown> {
   } catch {
     return {};
   }
+}
+
+export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
+  const url = new URL(req.url, `http://${req.hostname}`);
+  const isPublic = 
+    url.pathname === '/health' ||
+    url.pathname.startsWith('/v1/auth/') ||
+    url.pathname === '/v1/workspace/invites/accept';
+
+  let workspaceId: string | null = null;
+
+  // Custom Domain Support: check if host matches a custom domain workspace
+  const host = req.headers.host;
+  if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+    const ws = await prisma.workspace.findFirst({ where: { customDomain: host } });
+    if (ws) {
+      workspaceId = ws.id;
+    }
+  }
+
+  const auth = req.headers.authorization;
+  if (auth && typeof auth === 'string' && auth.startsWith('Bearer ')) {
+    const claims = verifyAccessToken(auth.slice(7));
+    if (claims) {
+      req.ctx = {
+        userId: claims.sub,
+        workspaceId: workspaceId || claims.workspaceId,
+        role: claims.role
+      };
+      return;
+    }
+  }
+
+  // Development bypass
+  if (process.env.NODE_ENV !== 'production') {
+    req.ctx = {
+      userId: (req.headers['x-user-id'] as string) || 'demo-user',
+      workspaceId: workspaceId || (req.headers['x-workspace-id'] as string) || 'demo-workspace',
+      role: (req.headers['x-role'] as Role) || 'OWNER'
+    };
+    return;
+  }
+
+  if (!isPublic) {
+    return reply.status(401).send({ error: 'unauthorized' });
+  }
+
+  // Safe dummy context for public routes so they don't crash
+  req.ctx = {
+    userId: 'anonymous',
+    workspaceId: workspaceId || 'anonymous',
+    role: 'MEMBER'
+  };
 }

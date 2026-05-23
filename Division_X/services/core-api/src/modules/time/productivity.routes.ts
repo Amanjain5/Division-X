@@ -3,6 +3,7 @@ import { json, readJson } from '../../core/http.js';
 import type { RequestContext } from '../../core/types.js';
 import { hasRole } from '../../core/types.js';
 import { writeAudit } from '../../core/audit.js';
+import { sendGlobalNotification } from '../../core/notifications.js';
 
 async function getPolicy(workspaceId: string) { return prisma.workspacePolicy.findFirst({ where: { workspaceId } }); }
 
@@ -12,12 +13,14 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
   if (req.method === 'POST' && url.pathname === '/v1/break/start') {
     const br = await prisma.breakSession.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'break.start', targetType: 'break_session', targetId: br.id });
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Break Started', 'Has gone on a break');
     return json({ break: br }, 201);
   }
   if (req.method === 'POST' && url.pathname === '/v1/break/stop') {
     const running = await prisma.breakSession.findFirst({ where: { workspaceId: ctx.workspaceId, userId: ctx.userId, endedAt: null }, orderBy: { startedAt: 'desc' } });
     if (!running) return json({ message: 'no_running_break' });
     const br = await prisma.breakSession.update({ where: { id: running.id }, data: { endedAt: new Date() } });
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Break Stopped', 'Ended break session');
     return json({ break: br });
   }
 
@@ -31,7 +34,14 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
 
   if (req.method === 'POST' && url.pathname === '/v1/pomodoro/start') {
     const policy = (await getPolicy(ctx.workspaceId)) || { pomodoroMinutes: 25, breakMinutes: 5 };
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Pomodoro Started', 'Began a Pomodoro focus session');
     return json({ started: true, focusMinutes: policy.pomodoroMinutes ?? 25, breakMinutes: policy.breakMinutes ?? 5, startedAt: new Date().toISOString() });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/time/idle') {
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'idle.detected', targetType: 'user', targetId: ctx.userId });
+    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Idle Detected', 'User has been inactive while active timer is running');
+    return json({ success: true });
   }
 
   return null;

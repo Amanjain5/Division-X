@@ -1,1 +1,4 @@
-Invalid package.json in package.json
+
+> @divisionx/utils@0.1.0 typecheck D:\Division X\Division_X\packages\utils
+> tsc -p tsconfig.json --noEmit
+

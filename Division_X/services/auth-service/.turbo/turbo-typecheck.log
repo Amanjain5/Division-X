@@ -1,0 +1,4 @@
+
+> @divisionx/auth-service@0.1.0 typecheck D:\Division X\Division_X\services\auth-service
+> tsc -p tsconfig.json --noEmit
+

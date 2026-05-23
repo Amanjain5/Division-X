@@ -1,0 +1,4 @@
+
+> @divisionx/icons@0.1.0 typecheck D:\Division X\Division_X\packages\icons
+> tsc -p tsconfig.json --noEmit
+

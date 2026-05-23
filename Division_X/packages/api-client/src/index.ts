@@ -46,13 +46,14 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // --- Auth ---
-export function persistAuth(result: AuthResult) {
+export function persistAuth(result: AuthResult & { workspaces?: any[] }) {
   localStorage.setItem('thetime_token', result.token);
   if (result.refreshToken) localStorage.setItem('thetime_refresh_token', result.refreshToken);
   localStorage.setItem('thetime_role', result.role);
   localStorage.setItem('thetime_user_id', result.userId);
   localStorage.setItem('thetime_workspace_id', result.workspaceId);
   if (result.email) localStorage.setItem('thetime_user_email', result.email);
+  if (result.workspaces) localStorage.setItem('thetime_workspaces', JSON.stringify(result.workspaces));
 }
 
 export function clearAuth() {
@@ -76,8 +77,17 @@ export async function signup(payload: { email: string; password: string; workspa
   return api('/v1/auth/signup', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function login(payload: { email: string; password: string }): Promise<AuthResult> {
+export async function login(payload: { email: string; password: string }): Promise<AuthResult & { workspaces?: any[] }> {
   return api('/v1/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function switchWorkspace(workspaceId: string, userId: string): Promise<AuthResult> {
+  const result = await api<AuthResult>('/v1/auth/switch', {
+    method: 'POST',
+    body: JSON.stringify({ workspaceId, userId })
+  });
+  persistAuth(result);
+  return result;
 }
 
 export async function acceptInvite(payload: { token: string; name?: string; password: string }): Promise<{ accepted: boolean; workspaceId: string; role: string }> {
@@ -122,13 +132,14 @@ export async function getTimerAlerts(): Promise<{ longRunning: boolean; runningM
 }
 
 // --- Time Entries ---
-export async function getTimeEntries(params?: { page?: number; pageSize?: number; from?: string; to?: string; projectId?: string }): Promise<{ items: any[]; pagination: { page: number; pageSize: number; total: number } }> {
+export async function getTimeEntries(params?: { page?: number; pageSize?: number; from?: string; to?: string; projectId?: string; userId?: string }): Promise<{ items: any[]; pagination: { page: number; pageSize: number; total: number } }> {
   const q = new URLSearchParams();
   if (params?.page) q.set('page', String(params.page));
   if (params?.pageSize) q.set('pageSize', String(params.pageSize));
   if (params?.from) q.set('from', params.from);
   if (params?.to) q.set('to', params.to);
   if (params?.projectId) q.set('projectId', params.projectId);
+  if (params?.userId) q.set('userId', params.userId);
   const suffix = q.toString() ? `?${q.toString()}` : '';
   return api(`/v1/time-entries${suffix}`);
 }
@@ -291,6 +302,14 @@ export async function clockInAttendance(): Promise<{ attendance: any }> {
   return api('/v1/attendance/clock-in', { method: 'POST' });
 }
 
+export async function clockOutAttendance(): Promise<{ attendance: any }> {
+  return api('/v1/attendance/clock-out', { method: 'POST' });
+}
+
 export async function getTodayAttendance(): Promise<{ attendance: any | null }> {
   return api('/v1/attendance/today');
+}
+
+export async function reportIdle(): Promise<{ success: boolean }> {
+  return api('/v1/time/idle', { method: 'POST' });
 }
