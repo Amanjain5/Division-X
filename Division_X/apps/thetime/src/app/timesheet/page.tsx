@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { AppShell } from '../../components/app-shell';
 import { Toast } from '../../components/toast';
 import { getTimeEntries, getWorkspace, getCatalog } from '@divisionx/api-client';
+import {
+  SidebarTabs,
+  CalendarView,
+  WeekGrid,
+  EventDetailsSidebar,
+} from '../../components/calendar';
+
+type ViewMode = 'week' | 'month' | 'year';
+type TabMode = 'overview' | 'calendar' | 'tasks' | 'activity';
 
 function formatDuration(ms: number): string {
   const h = Math.floor(ms / 3600000);
@@ -13,38 +22,91 @@ function formatDuration(ms: number): string {
   return `${h}h ${m}m`;
 }
 
-function getTimelineRange(offset: number): { start: Date; end: Date; days: Date[] } {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const start = new Date(now);
-  start.setDate(now.getDate() - 7 + offset * 14); 
+function startTimeStr(date: Date): string {
+  let h = date.getHours();
+  const m = String(date.getMinutes()).padStart(2, '0');
+  const period = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  h = h ? h : 12;
+  return `${h}:${m} ${period}`;
+}
+
+// Generate dates for Month View (6 weeks / 42 days grid)
+function getMonthGrid(anchor: Date): Date[] {
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  
+  const firstDay = new Date(year, month, 1);
+  const startDayOfWeek = firstDay.getDay();
+  
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - startDayOfWeek);
+  
   const days: Date[] = [];
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 42; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     days.push(d);
   }
-  const end = new Date(days[days.length - 1]);
-  end.setHours(23, 59, 59, 999);
-  return { start, end, days };
+  return days;
+}
+
+// Generate dates for Week View (7 days)
+function getWeekGrid(anchor: Date): Date[] {
+  const startDayOfWeek = anchor.getDay();
+  const start = new Date(anchor);
+  start.setDate(anchor.getDate() - startDayOfWeek);
+  
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    days.push(d);
+  }
+  return days;
 }
 
 export default function TimesheetPage() {
+  const [activeTab, setActiveTab] = useState<TabMode>('calendar');
+  const [view, setView] = useState<ViewMode>('week');
+  const [anchorDate, setAnchorDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  
   const [items, setItems] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [allTags, setAllTags] = useState<any[]>([]);
-  const [offset, setOffset] = useState(0);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const range = useMemo(() => getTimelineRange(offset), [offset]);
-  const columnWidth = 220; // Even wider for tags and details
-  const sidebarWidth = 280;
+  // Mini calendar for sidebar
+  const miniCalendarDays = useMemo(() => {
+    return getMonthGrid(selectedDate);
+  }, [selectedDate]);
+
+  // Grid days for main view
+  const gridDays = useMemo(() => {
+    return view === 'week' ? getWeekGrid(anchorDate) : getMonthGrid(anchorDate);
+  }, [view, anchorDate]);
+
+  // Query bounds
+  const queryBounds = useMemo(() => {
+    if (gridDays.length === 0) return null;
+    const start = new Date(gridDays[0]);
+    const end = new Date(gridDays[gridDays.length - 1]);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, [gridDays]);
 
   const refresh = useCallback(async () => {
+    if (!queryBounds) return;
     try {
       const [entriesData, workspaceData, tagsData] = await Promise.all([
-        getTimeEntries({ from: range.start.toISOString(), to: range.end.toISOString(), pageSize: 1000 }),
+        getTimeEntries({ from: queryBounds.start.toISOString(), to: queryBounds.end.toISOString(), pageSize: 1000 }),
         getWorkspace(),
         getCatalog('tags')
       ]);
@@ -54,230 +116,164 @@ export default function TimesheetPage() {
     } catch {
       setToast({ text: 'Failed to load timeline data', type: 'error' });
     }
-  }, [range]);
+  }, [queryBounds]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Aggregation Logic: Project -> Day Summary (with Tags and Descriptions)
-  const aggregatedData = useMemo(() => {
-    const projects: Record<string, { id: string; name: string; color: string; days: Record<string, any> }> = {};
-    
-    items.forEach(item => {
-      const pId = item.project?.id || 'unassigned';
-      const dateKey = new Date(item.startedAt).toISOString().split('T')[0];
-      
-      if (!projects[pId]) {
-        projects[pId] = {
-          id: pId,
-          name: item.project?.name || 'General Tasks',
-          color: item.project?.color || '#10b981',
-          days: {}
-        };
-      }
-      
-      if (!projects[pId].days[dateKey]) {
-        projects[pId].days[dateKey] = {
-          totalMs: 0,
-          descriptions: new Set<string>(),
-          users: new Set<string>(),
-          tags: new Set<string>()
-        };
-      }
-      
-      const duration = (item.endedAt ? new Date(item.endedAt).getTime() : Date.now()) - new Date(item.startedAt).getTime();
-      projects[pId].days[dateKey].totalMs += duration;
-      if (item.description) projects[pId].days[dateKey].descriptions.add(item.description);
-      projects[pId].days[dateKey].users.add(item.userId);
-      if (item.tagId) projects[pId].days[dateKey].tags.add(item.tagId);
-    });
+  // Get selected event
+  const selectedEvent = useMemo(() => {
+    return items.find((e) => e.id === selectedEventId);
+  }, [selectedEventId, items]);
 
-    return Object.values(projects).sort((a, b) => a.name.localeCompare(b.name));
-  }, [items]);
+  const selectedGroupEvents = useMemo(() => {
+    if (selectedGroupIds.length === 0) return [];
+    return selectedGroupIds
+      .map((id) => items.find((item) => item.id === id))
+      .filter(Boolean);
+  }, [selectedGroupIds, items]);
+
+  // Format date range for header
+  const dateRange = useMemo(() => {
+    if (view === 'week') {
+      const start = gridDays[0];
+      const end = gridDays[6];
+      return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    return '';
+  }, [gridDays, view]);
+
+  // Week days for display
+  const weekDaysDisplay = useMemo(() => {
+    return gridDays.map((day) => ({
+      day: day.toLocaleDateString('en-US', { weekday: 'short' }),
+      date: day.getDate(),
+    }));
+  }, [gridDays]);
 
   return (
-    <AppShell title="Visual Timesheet">
-      <div className="max-w-[1600px] mx-auto px-6 py-6">
-        
-        {/* Modern Interactive Header */}
-        <div className="flex items-end justify-between mb-10">
-          <div className="space-y-1">
-            <h1 className="text-5xl font-black text-white tracking-tighter italic leading-none">
-              TIMELINE<span className="text-primary opacity-50">.</span>
-            </h1>
-            <div className="flex items-center gap-3">
-              <span className="px-2 py-0.5 bg-primary/20 text-primary text-[9px] font-black uppercase tracking-[0.2em] rounded">Live Overview</span>
-              <p className="text-white/20 text-[10px] font-bold uppercase tracking-widest">Resource Analysis & Project Mapping</p>
-            </div>
+    <AppShell title="Timesheet">
+      <div className="timesheet-scheduler">
+        <SidebarTabs
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          miniCalendarDays={miniCalendarDays}
+          currentMonth={selectedDate}
+          selectedDate={selectedDate}
+          onDateSelect={(date) => {
+            setSelectedDate(date);
+            setAnchorDate(date);
+          }}
+        />
+
+        {/* Main Calendar Area */}
+        {activeTab === 'calendar' && (
+          <CalendarView
+            title={anchorDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            dateRange={dateRange}
+            weekDays={weekDaysDisplay}
+            onToday={() => {
+              const d = new Date();
+              d.setHours(0, 0, 0, 0);
+              setAnchorDate(d);
+              setSelectedDate(d);
+            }}
+            onViewChange={setView}
+            currentView={view}
+            totalEvents={items.length}
+            totalHours={formatDuration(
+              items.reduce((sum, item) => {
+                if (!item.endedAt) return sum;
+                return sum + (new Date(item.endedAt).getTime() - new Date(item.startedAt).getTime());
+              }, 0)
+            )}
+          >
+            {view === 'week' && (
+              <WeekGrid
+                weekDays={gridDays}
+                events={items.map((item) => ({
+                  id: item.id,
+                  title: item.description || 'Untitled Work',
+                  type: item.project?.name || 'General',
+                  startTime: new Date(item.startedAt),
+                  endTime: item.endedAt ? new Date(item.endedAt) : undefined,
+                  color: item.project?.color || '#3b82f6',
+                }))}
+                selectedEventId={selectedEventId}
+                onEventClick={(eventId) => {
+                  setSelectedGroupIds([]);
+                  setSelectedEventId(eventId);
+                }}
+                onMoreClick={(eventIds) => {
+                  setSelectedEventId(null);
+                  setSelectedGroupIds(eventIds);
+                }}
+              />
+            )}
+          </CalendarView>
+        )}
+
+        {/* Other Tabs */}
+        {activeTab !== 'calendar' && (
+          <div className="timesheet-empty-panel">
+            <p>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} section coming soon...</p>
           </div>
-          
-          <div className="flex items-center gap-4 bg-white/[0.02] p-2 rounded-2xl border border-white/5 backdrop-blur-xl">
-            <div className="flex gap-1">
-              <button onClick={() => setOffset(o => o - 1)} className="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all text-white/40 hover:text-white">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
-              </button>
-              <button onClick={() => setOffset(0)} className="px-5 h-10 flex items-center justify-center text-white/80 hover:text-white font-black text-[10px] uppercase tracking-widest transition-all hover:bg-white/5 rounded-xl">
-                Current
-              </button>
-              <button onClick={() => setOffset(o => o + 1)} className="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all text-white/40 hover:text-white">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Master Timeline Grid */}
-        <div className="relative bg-[#03110b] rounded-[3rem] border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,0.6)] overflow-hidden">
-          <div ref={scrollRef} className="overflow-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 280px)' }}>
-            <div style={{ width: (columnWidth * 14) + sidebarWidth, minHeight: '100%' }}>
-              
-              {/* STICKY COLUMN HEADERS */}
-              <div className="flex sticky top-0 z-50 bg-[#03110b]/90 backdrop-blur-3xl border-b border-white/5">
-                <div className="shrink-0 sticky left-0 z-[60] bg-[#03110b] flex items-center px-12 border-r border-white/5" style={{ width: sidebarWidth, height: 110 }}>
-                  <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/10">Project Engine</span>
-                </div>
-                <div className="flex">
-                  {range.days.map((day, i) => {
-                    const isToday = day.toDateString() === new Date().toDateString();
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                    return (
-                      <div key={i} className={`shrink-0 flex flex-col items-center justify-center border-r border-white/5 transition-all ${isToday ? 'bg-primary/10' : isWeekend ? 'bg-white/[0.01]' : ''}`} style={{ width: columnWidth, height: 110 }}>
-                        <span className={`text-[8px] font-black uppercase tracking-[0.3em] mb-2 ${isToday ? 'text-primary' : 'text-white/20'}`}>
-                          {day.toLocaleDateString('en-US', { weekday: 'long' })}
-                        </span>
-                        <span className={`text-3xl font-black ${isToday ? 'text-white drop-shadow-[0_0_10px_var(--primary)]' : 'text-white/50'}`}>
-                          {day.getDate()}
-                        </span>
-                        {isToday && <div className="mt-3 w-8 h-1 rounded-full bg-primary shadow-[0_0_15px_var(--primary)]" />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+        {/* Event Details Sidebar */}
+        {(selectedEvent || selectedGroupEvents.length > 0) && (
+          <EventDetailsSidebar
+            isOpen={true}
+            eventTitle={
+              selectedGroupEvents.length > 0
+                ? `${selectedGroupEvents.length} overlapping time blocks`
+                : selectedEvent.description || 'Untitled Work'
+            }
+            eventType={
+              selectedGroupEvents.length > 0
+                ? 'Grouped timesheet entries'
+                : selectedEvent.project?.name || 'General'
+            }
+            date={new Date((selectedEvent || selectedGroupEvents[0]).startedAt).toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+            time={startTimeStr(new Date((selectedEvent || selectedGroupEvents[0]).startedAt))}
+            duration={
+              selectedGroupEvents.length > 0
+                ? `${selectedGroupEvents.length} entries`
+                : selectedEvent.endedAt
+                ? formatDuration(
+                    new Date(selectedEvent.endedAt).getTime() -
+                      new Date(selectedEvent.startedAt).getTime()
+                  )
+                : 'In Progress'
+            }
+            description={selectedGroupEvents.length > 0 ? '' : selectedEvent.description}
+            groupedEvents={selectedGroupEvents.map((event: any) => ({
+              id: event.id,
+              title: event.description || 'Untitled Work',
+              type: event.project?.name || 'General',
+              time: startTimeStr(new Date(event.startedAt)),
+              duration: event.endedAt
+                ? formatDuration(new Date(event.endedAt).getTime() - new Date(event.startedAt).getTime())
+                : 'In Progress',
+              color: event.project?.color || '#34D399',
+            }))}
+            guests={members.slice(0, 2).map((member: any, index) => ({
+              name: member.name || member.email || `Team member ${index + 1}`,
+              role: index === 0 ? 'Owner' : 'Collaborator',
+            }))}
+            onClose={() => {
+              setSelectedEventId(null);
+              setSelectedGroupIds([]);
+            }}
+          />
+        )}
 
-              {/* PROJECT ROWS */}
-              <div className="relative">
-                {aggregatedData.map((project) => (
-                  <div key={project.id} className="flex border-b border-white/5 group transition-all hover:bg-white/[0.005]">
-                    {/* Project Info Sidebar */}
-                    <div className="shrink-0 sticky left-0 z-40 bg-[#03110b]/95 backdrop-blur-2xl px-12 py-10 border-r border-white/5 flex flex-col justify-center" style={{ width: sidebarWidth }}>
-                      <div className="flex items-center gap-6 group/side">
-                        <div className="w-1.5 h-12 rounded-full transition-all group-hover/side:scale-y-110 shadow-[0_0_20px_rgba(0,0,0,0.5)]" style={{ backgroundColor: project.color }} />
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-white uppercase tracking-tight truncate leading-tight group-hover/side:text-primary transition-colors">{project.name}</div>
-                          <div className="text-[9px] text-white/20 font-bold mt-2 uppercase tracking-[0.2em] flex items-center gap-2">
-                            <span className="w-1 h-1 rounded-full bg-primary" /> {Object.keys(project.days).length} Active Segments
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Day Cells */}
-                    <div className="flex">
-                      {range.days.map((day, i) => {
-                        const dateKey = day.toISOString().split('T')[0];
-                        const dayData = project.days[dateKey];
-                        const isToday = day.toDateString() === new Date().toDateString();
-
-                        return (
-                          <div key={i} className={`shrink-0 p-5 border-r border-white/5 flex items-center justify-center transition-all ${isToday ? 'bg-primary/[0.015]' : ''}`} style={{ width: columnWidth }}>
-                            {dayData ? (
-                              <div className="w-full group/card relative">
-                                {/* Glow backdrop */}
-                                <div className="absolute -inset-4 bg-primary/20 blur-2xl rounded-full opacity-0 group-hover/card:opacity-20 transition-all duration-500" style={{ backgroundColor: project.color }} />
-                                
-                                <div className="relative min-h-[120px] w-full rounded-[2rem] bg-white/[0.03] border border-white/5 p-5 flex flex-col justify-between transition-all group-hover/card:bg-white/[0.05] group-hover/card:border-white/10 group-hover/card:-translate-y-2 shadow-2xl"
-                                     style={{ borderLeft: `5px solid ${project.color}` }}>
-                                  
-                                  {/* Header: Duration & Avatars */}
-                                  <div className="flex items-center justify-between mb-3">
-                                    <span className="text-xs font-black text-white uppercase tracking-tighter">{formatDuration(dayData.totalMs)}</span>
-                                    <div className="flex -space-x-2.5">
-                                      {Array.from(dayData.users).map((uId: any, idx) => {
-                                        const member = members.find(m => m.id === uId);
-                                        const initial = member ? member.name[0] : '?';
-                                        return (
-                                          <div key={uId} className="w-6 h-6 rounded-full bg-[#03110b] border border-white/10 flex items-center justify-center text-[9px] font-black text-white/80 uppercase shadow-xl" style={{ zIndex: 10 - idx }}>
-                                            {initial}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  {/* Middle: Description Sample */}
-                                  <div className="mb-3">
-                                    <p className="text-[10px] font-bold text-white/40 uppercase leading-tight line-clamp-2 italic">
-                                      {(Array.from(dayData.descriptions)[0] as string) || 'Unlabeled Activity'}
-                                    </p>
-                                  </div>
-
-                                  {/* Footer: Tags */}
-                                  <div className="flex flex-wrap gap-1.5 mt-auto pt-2 border-t border-white/5">
-                                    {Array.from(dayData.tags).slice(0, 3).map((tId: any) => {
-                                      const tag = allTags.find(t => t.id === tId);
-                                      if (!tag) return null;
-                                      return (
-                                        <span key={tId} className="px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-white/40" style={{ borderColor: `${tag.color}44`, color: tag.color }}>
-                                          {tag.name}
-                                        </span>
-                                      );
-                                    })}
-                                    {dayData.tags.size > 3 && <span className="text-[7px] font-bold text-white/20">+{dayData.tags.size - 3} More</span>}
-                                    {dayData.tags.size === 0 && <span className="text-[7px] font-bold text-white/10 uppercase italic tracking-tighter">No Tags</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="w-1.5 h-1.5 rounded-full bg-white/[0.03]" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-
-                {/* ENHANCED EMPTY STATE */}
-                {aggregatedData.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-52">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-primary/20 blur-[100px] animate-pulse" />
-                      <div className="relative text-[120px] font-black text-white/[0.02] uppercase tracking-[0.2em] leading-none select-none">
-                        EMPTY
-                      </div>
-                    </div>
-                    <div className="mt-4 flex flex-col items-center gap-2">
-                      <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.5em]">No synchronization detected</p>
-                      <div className="w-12 h-0.5 bg-white/5 rounded-full" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <Toast message={toast?.text || ''} type={toast?.type || 'success'} onClose={() => setToast(null)} />
       </div>
-
-      <Toast message={toast?.text || ''} type={toast?.type || 'success'} onClose={() => setToast(null)} />
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 10px;
-          height: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 50px;
-          border: 3px solid transparent;
-          background-clip: content-box;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.08);
-        }
-      `}</style>
     </AppShell>
   );
 }

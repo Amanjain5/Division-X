@@ -1,7 +1,4 @@
 {
-  "/dashboard/page": "app/dashboard/page.js",
   "/timesheet/page": "app/timesheet/page.js",
-  "/workspace/approvals/page": "app/workspace/approvals/page.js",
-  "/tracker/page": "app/tracker/page.js",
-  "/workspace/audit/page": "app/workspace/audit/page.js"
+  "/tracker/page": "app/tracker/page.js"
 }
