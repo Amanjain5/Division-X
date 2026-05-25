@@ -469,7 +469,7 @@ export default function TrackerPage() {
           <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Task Board</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* Priority Filter */}
-            <select className="select" style={{ minWidth: 120, background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-light)', fontSize: '0.85rem' }} value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+            <select className="select select-sm" style={{ minWidth: 140 }} value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
               <option value="All">All Priorities</option>
               <option value="Low">Low</option>
               <option value="Medium">Medium</option>
@@ -487,12 +487,12 @@ export default function TrackerPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <input className="input" placeholder="Task name..." value={newTaskName} onChange={e => setNewTaskName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') onAddTask(); }} autoFocus />
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <select className="select" style={{ flex: 1, background: 'rgba(255,255,255,0.08)' }} value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)}>
+                  <select className="select" style={{ flex: 1 }} value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)}>
                     <option value="Low">Low Priority</option>
                     <option value="Medium">Medium Priority</option>
                     <option value="High">High Priority</option>
                   </select>
-                  <select className="select" style={{ flex: 1, background: 'rgba(255,255,255,0.08)' }} value={newTaskProject} onChange={e => setNewTaskProject(e.target.value)}>
+                  <select className="select" style={{ flex: 1 }} value={newTaskProject} onChange={e => setNewTaskProject(e.target.value)}>
                     <option value="">No Project</option>
                     {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>

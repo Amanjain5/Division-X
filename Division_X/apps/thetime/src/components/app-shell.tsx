@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentRole, clearAuth, switchWorkspace } from '@divisionx/api-client';
@@ -30,6 +30,12 @@ export function AppShell({ title, children }: { title: string; children: React.R
 
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -139,9 +145,48 @@ export function AppShell({ title, children }: { title: string; children: React.R
     router.push('/auth/login');
   }
 
+  function handleNavigate(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (href === pathname) return;
+    e.preventDefault();
+    setPendingHref(href);
+    startTransition(() => {
+      router.push(href);
+    });
+  }
+
+  function prefetchRoute(href: string) {
+    if (href !== pathname) {
+      router.prefetch(href);
+    }
+  }
+
+  function navClass(href: string) {
+    const isActive = pathname === href;
+    const isLoading = pendingHref === href || (isPending && pendingHref === href);
+    return `nav-link ${isActive ? 'active' : ''} ${isLoading ? 'pending' : ''}`;
+  }
+
+  function renderNavLink(icon: string, name: string, href: string) {
+    return (
+      <Link
+        key={href}
+        href={href}
+        onClick={(e) => handleNavigate(e, href)}
+        onMouseEnter={() => prefetchRoute(href)}
+        onFocus={() => prefetchRoute(href)}
+        className={navClass(href)}
+        aria-current={pathname === href ? 'page' : undefined}
+      >
+        <span style={{ fontSize: '0.95rem', width: 20, textAlign: 'center' }}>{icon}</span>
+        <span>{name}</span>
+      </Link>
+    );
+  }
+
   return (
     <AuthGuard>
       <div className="app-layout">
+        {(isPending || pendingHref) && <div className="route-progress" />}
         <aside className="sidebar">
           <div className="sidebar-header">
             <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit' }}>
@@ -160,22 +205,12 @@ export function AppShell({ title, children }: { title: string; children: React.R
             <div style={{ padding: '0 18px 16px' }}>
               <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.05em' }}>Organization</div>
               <select 
+                className="select select-sidebar"
                 value={activeWorkspaceId} 
                 onChange={handleWorkspaceChange}
-                style={{
-                  width: '100%',
-                  background: 'var(--bg-glass)',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: 'white',
-                  fontSize: '0.85rem',
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
               >
                 {workspaces.map((ws: any) => (
-                  <option key={ws.id} value={ws.id} style={{ background: '#121214', color: 'white' }}>
+                  <option key={ws.id} value={ws.id}>
                     {ws.name} ({ws.role})
                   </option>
                 ))}
@@ -186,21 +221,13 @@ export function AppShell({ title, children }: { title: string; children: React.R
           <nav className="nav-links">
             {/* Group: Tracking */}
             <div className="nav-section-label">Tracking</div>
-            {links.filter(([, , href]) => ['/tracker', '/timesheet'].includes(href)).map(([icon, name, href]) => (
-              <Link key={href} href={href} className={`nav-link ${pathname === href ? 'active' : ''}`}>
-                <span style={{ fontSize: '0.95rem', width: 20, textAlign: 'center' }}>{icon}</span> {name}
-              </Link>
-            ))}
+            {links.filter(([, , href]) => ['/tracker', '/timesheet'].includes(href)).map(([icon, name, href]) => renderNavLink(icon, name, href))}
 
             {/* Group: Analytics */}
             {links.some(([, , href]) => ['/dashboard', '/reports'].includes(href)) && (
               <>
                 <div className="nav-section-label">Analytics</div>
-                {links.filter(([, , href]) => ['/dashboard', '/reports'].includes(href)).map(([icon, name, href]) => (
-                  <Link key={href} href={href} className={`nav-link ${pathname === href ? 'active' : ''}`}>
-                    <span style={{ fontSize: '0.95rem', width: 20, textAlign: 'center' }}>{icon}</span> {name}
-                  </Link>
-                ))}
+                {links.filter(([, , href]) => ['/dashboard', '/reports'].includes(href)).map(([icon, name, href]) => renderNavLink(icon, name, href))}
               </>
             )}
 
@@ -208,11 +235,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
             {links.some(([, , href]) => href.startsWith('/workspace/')) && (
               <>
                 <div className="nav-section-label">Workspace</div>
-                {links.filter(([, , href]) => href.startsWith('/workspace/')).map(([icon, name, href]) => (
-                  <Link key={href} href={href} className={`nav-link ${pathname === href ? 'active' : ''}`}>
-                    <span style={{ fontSize: '0.95rem', width: 20, textAlign: 'center' }}>{icon}</span> {name}
-                  </Link>
-                ))}
+                {links.filter(([, , href]) => href.startsWith('/workspace/')).map(([icon, name, href]) => renderNavLink(icon, name, href))}
               </>
             )}
           </nav>
@@ -232,7 +255,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
             >↪</button>
           </div>
         </aside>
-        <main className="main-content">
+        <main className={`main-content route-content ${isPending || pendingHref ? 'route-content-pending' : ''}`}>
           <div className="page-header">
             <h1 className="page-title">{title}</h1>
           </div>

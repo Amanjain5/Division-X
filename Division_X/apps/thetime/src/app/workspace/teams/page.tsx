@@ -79,7 +79,7 @@ export default function TeamsPage() {
               <strong style={{ fontWeight: 500 }}>{m.name || m.email.split('@')[0]}</strong>
               <span style={{ color: 'var(--text-muted)' }}>{m.email}</span>
               {isAdmin ? (
-                <select className="select" style={{ padding: '4px 8px', fontSize: '0.8rem' }} value={m.role} onChange={(e) => onRoleChange(m.id, e.target.value)}>
+                <select className="select select-sm" value={m.role} onChange={(e) => onRoleChange(m.id, e.target.value)}>
                   <option value="MEMBER">Member</option><option value="MANAGER">Manager</option><option value="ADMIN">Admin</option><option value="OWNER">Owner</option>
                 </select>
               ) : (

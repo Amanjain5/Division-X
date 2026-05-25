@@ -64,10 +64,42 @@ a { text-decoration: none; color: inherit; }
    APP SHELL — DARK GLASSMORPHISM
    ═══════════════════════════════════════════ */
 
-.app-layout { display: flex; min-height: 100vh; }
+.app-layout {
+  display: flex;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+.route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  z-index: 200;
+  overflow: hidden;
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.route-progress::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, var(--primary), var(--primary-hover));
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.55);
+  animation: routeProgressSweep 0.9s ease-in-out infinite;
+}
 
 .sidebar { 
   width: 250px; 
+  height: 100vh;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
   background: var(--bg-sidebar);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -97,31 +129,99 @@ a { text-decoration: none; color: inherit; }
 
 .nav-links { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
 .nav-link {
+  position: relative;
   padding: 10px 14px;
   border-radius: var(--radius-md);
   color: var(--text-muted);
   font-weight: 500;
   font-size: 0.9rem;
-  transition: all 0.2s ease;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.16s ease;
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
 }
-.nav-link:hover { background: var(--bg-glass-hover); color: var(--text-secondary); }
+.nav-link::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 999px;
+  background: var(--primary);
+  transform: translateY(-50%);
+  transition: height 0.18s ease, opacity 0.18s ease;
+  opacity: 0;
+}
+.nav-link:hover { background: var(--bg-glass-hover); color: var(--text-secondary); transform: translateX(2px); }
 .nav-link.active { 
   background: var(--bg-glass-active); 
   color: var(--primary); 
   font-weight: 600; 
   box-shadow: inset 0 0 0 1px var(--border-glow);
 }
+.nav-link.active::before,
+.nav-link.pending::before {
+  height: 18px;
+  opacity: 1;
+}
+.nav-link.pending {
+  background: var(--bg-glass-hover);
+  color: var(--primary-hover);
+  box-shadow: inset 0 0 0 1px var(--border-glow);
+}
+.nav-link.pending::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.65);
+  animation: pendingDot 0.85s ease-in-out infinite;
+}
+.nav-link:active {
+  transform: translateX(2px) scale(0.985);
+}
 
 .main-content { 
   flex: 1; 
+  min-width: 0;
+  height: 100vh;
   padding: 28px 36px; 
-  overflow-y: auto; 
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex; 
   flex-direction: column; 
   gap: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(52, 211, 153, 0.45) rgba(255, 255, 255, 0.04);
+}
+.main-content::-webkit-scrollbar {
+  width: 10px;
+}
+.main-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+.main-content::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.38);
+  border-radius: 999px;
+  border: 2px solid rgba(1, 26, 19, 0.9);
+}
+.main-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.58);
+}
+.route-content {
+  animation: routeContentIn 0.24s ease both;
+  transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease;
+}
+.route-content-pending {
+  opacity: 0.72;
+  filter: saturate(0.92);
+  transform: translateY(2px);
+  pointer-events: none;
 }
 .page-header { margin-bottom: 4px; }
 .page-title { 
@@ -174,8 +274,33 @@ a { text-decoration: none; color: inherit; }
   font-size: 0.9rem;
   background: var(--bg-glass);
   color: var(--text-main);
-  transition: all 0.2s;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.16s ease, color 0.18s ease;
   outline: none;
+}
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 42px;
+  padding-right: 42px;
+  cursor: pointer;
+  font-weight: 650;
+  line-height: 1.2;
+  background-color: var(--bg-glass);
+  background-image:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(255, 255, 255, 0.02)),
+    url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5.5 7.5L10 12L14.5 7.5' stroke='%236EE7B7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-position: 0 0, right 14px center;
+  background-size: auto, 16px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+.select:hover {
+  border-color: var(--border-glow);
+  background-color: var(--bg-glass-hover);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.1), 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+.select:active {
+  transform: scale(0.99);
 }
 .input::placeholder { color: var(--text-dim); }
 .input:focus, .select:focus { 
@@ -183,7 +308,30 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 0 0 3px var(--primary-glow);
   background: var(--bg-glass-hover);
 }
-.select option { background: #0a3d2e; color: var(--text-main); }
+.select option {
+  background: #0a3d2e;
+  color: var(--text-main);
+  font-weight: 600;
+}
+.select option:checked {
+  background: #064e3b;
+  color: var(--primary-hover);
+}
+.select-sm {
+  min-height: 34px;
+  padding: 7px 34px 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  background-position: 0 0, right 10px center;
+}
+.select-sidebar {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 34px 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  background-position: 0 0, right 10px center;
+}
 
 /* ═══════════════════════════════════════════
    BUTTONS — GLASS
@@ -290,6 +438,30 @@ a { text-decoration: none; color: inherit; }
 .toast.error { background: rgba(239, 68, 68, 0.85); }
 .toast.success { background: rgba(5, 150, 105, 0.85); }
 @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@keyframes routeProgressSweep {
+  0% { transform: translateX(-120%); }
+  55% { transform: translateX(120%); }
+  100% { transform: translateX(260%); }
+}
+
+@keyframes pendingDot {
+  0%, 100% { opacity: 0.45; transform: scale(0.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes routeContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
 
 
 /* ═══════════════════════════════════════════════════════
@@ -1183,8 +1355,10 @@ a { text-decoration: none; color: inherit; }
   width: 330px;
   background: linear-gradient(90deg, rgba(247, 248, 252, 0.8), #ffffff);
   border-left: 1px solid #e9ebf2;
-  padding: 220px 18px 18px;
+  padding: 18px;
   color: #2d3436;
+  align-self: stretch;
+  overflow: hidden;
 }
 
 .event-detail-card {
@@ -1195,6 +1369,10 @@ a { text-decoration: none; color: inherit; }
   border-radius: 16px;
   padding: 24px 22px;
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14);
+  max-height: calc(100vh - 180px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .event-close-button {
@@ -1227,6 +1405,7 @@ a { text-decoration: none; color: inherit; }
 .event-detail-section {
   padding: 15px 0;
   border-top: 1px solid #eef0f5;
+  flex: 0 0 auto;
 }
 
 .event-detail-row {
@@ -1335,6 +1514,14 @@ a { text-decoration: none; color: inherit; }
   flex-direction: column;
   gap: 9px;
   margin-top: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: none;
+}
+
+.grouped-event-list::-webkit-scrollbar {
+  display: none;
 }
 
 .grouped-event-row {
@@ -1654,5 +1841,181 @@ a { text-decoration: none; color: inherit; }
 @media (max-width: 860px) {
   .timesheet-side-panel {
     border-bottom-color: var(--border-light);
+  }
+}
+
+/* Motion polish for Timesheet interactions. */
+.timesheet-scheduler {
+  animation: schedulerReveal 0.45s ease both;
+}
+
+.scheduler-tabs button,
+.scheduler-segmented button,
+.scheduler-tool-button,
+.scheduler-icon-button,
+.mini-days button,
+.event-close-button {
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.16s ease;
+}
+
+.scheduler-tabs button:active,
+.scheduler-segmented button:active,
+.scheduler-tool-button:active,
+.scheduler-icon-button:active,
+.mini-days button:active,
+.event-close-button:active,
+.calendar-event:active {
+  transform: scale(0.97);
+}
+
+.mini-calendar-card,
+.workflow-card,
+.scheduler-metrics div,
+.event-detail-card {
+  transition:
+    background 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s ease;
+}
+
+.mini-calendar-card:hover,
+.workflow-card:hover,
+.scheduler-metrics div:hover {
+  transform: translateY(-2px);
+}
+
+.workflow-step,
+.guest-row,
+.grouped-event-row {
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.workflow-step:hover,
+.guest-row:hover,
+.grouped-event-row:hover {
+  transform: translateX(2px);
+}
+
+.calendar-event {
+  animation: eventCardIn 0.28s ease both;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    outline-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.calendar-event-group:hover .event-group-action {
+  background: rgba(52, 211, 153, 0.22);
+  color: var(--text-main);
+  transform: translateX(2px);
+}
+
+.event-group-action {
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.event-detail-panel {
+  animation: detailPanelFade 0.24s ease both;
+}
+
+.event-detail-card {
+  animation: detailCardSlide 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.scheduler-tabs button:focus-visible,
+.scheduler-segmented button:focus-visible,
+.scheduler-tool-button:focus-visible,
+.scheduler-icon-button:focus-visible,
+.mini-days button:focus-visible,
+.calendar-event:focus-visible,
+.event-close-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@keyframes schedulerReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes eventCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes detailPanelFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes detailCardSlide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-progress::before,
+  .nav-link.pending::after,
+  .route-content {
+    animation: none;
+  }
+
+  .nav-link,
+  .route-content,
+  .route-content-pending {
+    transition: none;
+    transform: none;
+    filter: none;
+  }
+
+  .timesheet-scheduler,
+  .calendar-event,
+  .event-detail-panel,
+  .event-detail-card {
+    animation: none;
+  }
+
+  .scheduler-tabs button,
+  .scheduler-segmented button,
+  .scheduler-tool-button,
+  .scheduler-icon-button,
+  .mini-days button,
+  .event-close-button,
+  .mini-calendar-card,
+  .workflow-card,
+  .scheduler-metrics div,
+  .event-detail-card,
+  .workflow-step,
+  .guest-row,
+  .grouped-event-row,
+  .calendar-event,
+  .event-group-action {
+    transition: none;
   }
 }
