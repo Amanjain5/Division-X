@@ -40,8 +40,32 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
 
   if (req.method === 'POST' && url.pathname === '/v1/time/idle') {
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'idle.detected', targetType: 'user', targetId: ctx.userId });
-    await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Idle Detected', 'User has been inactive while active timer is running');
-    return json({ success: true });
+    
+    const policy = await getPolicy(ctx.workspaceId);
+    let autoPaused = false;
+    let breakSession = null;
+
+    if (policy?.autoPauseOnIdle) {
+      const running = await prisma.timeEntry.findFirst({
+        where: { workspaceId: ctx.workspaceId, userId: ctx.userId, endedAt: null },
+        orderBy: { startedAt: 'desc' }
+      });
+      if (running) {
+        await prisma.timeEntry.update({ where: { id: running.id }, data: { endedAt: new Date() } });
+        await prisma.runningTimer.deleteMany({ where: { userId: ctx.userId } });
+        breakSession = await prisma.breakSession.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId } });
+        await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'break.start', targetType: 'break_session', targetId: breakSession.id, metadata: { reason: 'auto_pause_on_idle' } });
+        autoPaused = true;
+      }
+    }
+
+    if (autoPaused) {
+      await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Idle Auto-Pause', 'Timer automatically paused and break started due to idle inactivity');
+    } else {
+      await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Idle Detected', 'User has been inactive while active timer is running');
+    }
+
+    return json({ success: true, autoPaused, breakSession });
   }
 
   return null;

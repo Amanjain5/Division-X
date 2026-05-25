@@ -155,5 +155,13 @@ export async function authRoutes(req: Request): Promise<Response | null> {
     return json({ success: true });
   }
 
+  if (req.method === 'POST' && url.pathname === '/v1/auth/logout') {
+    const body = (await readJson(req)) as { refreshToken?: string };
+    if (body.refreshToken) {
+      await prisma.session.deleteMany({ where: { refreshToken: body.refreshToken } });
+    }
+    return json({ success: true });
+  }
+
   return null;
 }

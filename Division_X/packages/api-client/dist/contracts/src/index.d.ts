@@ -3,6 +3,8 @@ export * from './common/versioning';
 export type TimerStartRequest = {
     description: string;
     projectId?: string;
+    taskId?: string;
+    billable?: boolean;
 };
 export type TimerStartResponse = {
     running: boolean;

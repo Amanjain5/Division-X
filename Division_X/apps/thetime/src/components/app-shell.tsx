@@ -6,11 +6,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentRole, clearAuth, switchWorkspace } from '@divisionx/api-client';
 import { AuthGuard } from './auth-guard';
 import { requestNotificationPermission, notifyCritical } from './notification-manager';
-
 const allLinks: Array<[string, string, string, Array<'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER'>]> = [
   ['⏱', 'Tracker', '/tracker', ['OWNER', 'ADMIN', 'MANAGER', 'MEMBER']],
   ['📋', 'Timesheet', '/timesheet', ['OWNER', 'ADMIN', 'MANAGER', 'MEMBER']],
   ['📊', 'Dashboard', '/dashboard', ['OWNER', 'ADMIN', 'MANAGER', 'MEMBER']],
+  ['👁', 'Activity Monitoring', '/workspace/activity', ['OWNER', 'ADMIN', 'MANAGER']],
   ['📈', 'Reports', '/reports', ['OWNER', 'ADMIN', 'MANAGER', 'MEMBER']],
   ['📁', 'Projects', '/workspace/projects', ['OWNER', 'ADMIN', 'MANAGER']],
   ['👥', 'Teams', '/workspace/teams', ['OWNER', 'ADMIN', 'MANAGER']],
@@ -57,6 +57,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
     let ws: WebSocket | null = null;
     let keepAliveInterval: any = null;
     let reconnectTimeout: any = null;
+    let reconnectAttempts = 0;
 
     async function initWebSocket() {
       await requestNotificationPermission();
@@ -71,6 +72,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
 
         ws.onopen = () => {
           console.log('🔌 Admin WebSocket successfully connected');
+          reconnectAttempts = 0; // Reset reconnection attempts on success
           keepAliveInterval = setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send('ping');
@@ -94,7 +96,11 @@ export function AppShell({ title, children }: { title: string; children: React.R
           console.log(`🔌 Admin WebSocket disconnected: ${event.code} ${event.reason}`);
           cleanup();
           if (event.code !== 4001 && event.code !== 4003) {
-            reconnectTimeout = setTimeout(initWebSocket, 5000);
+            // Exponential backoff with random jitter: delay = min(30s, 2^attempts * 1000ms) + random jitter (0 - 1500ms)
+            const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000) + Math.random() * 1500;
+            console.log(`🔌 Retrying WebSocket connection in ${(delay / 1000).toFixed(1)}s (Attempt ${reconnectAttempts + 1})`);
+            reconnectAttempts++;
+            reconnectTimeout = setTimeout(initWebSocket, delay);
           }
         };
 

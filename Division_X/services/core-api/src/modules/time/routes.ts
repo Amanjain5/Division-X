@@ -9,6 +9,22 @@ async function getPolicy(workspaceId: string) {
   return prisma.workspacePolicy.findFirst({ where: { workspaceId } });
 }
 
+async function validateTimeEntryRelations(workspaceId: string, projectId?: string, taskId?: string, tagId?: string): Promise<string | null> {
+  if (projectId) {
+    const proj = await prisma.project.findFirst({ where: { id: projectId, workspaceId } });
+    if (!proj) return 'invalid_project_reference';
+  }
+  if (taskId) {
+    const task = await prisma.task.findFirst({ where: { id: taskId, workspaceId } });
+    if (!task) return 'invalid_task_reference';
+  }
+  if (tagId) {
+    const tag = await prisma.tag.findFirst({ where: { id: tagId, workspaceId } });
+    if (!tag) return 'invalid_tag_reference';
+  }
+  return null;
+}
+
 export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Response | null> {
   const url = new URL(req.url);
 
@@ -16,6 +32,8 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
 
   if (req.method === 'POST' && url.pathname === '/v1/timer/start') {
     const body = (await readJson(req)) as { description?: string; projectId?: string; taskId?: string; tagId?: string; billable?: boolean };
+    const validationError = await validateTimeEntryRelations(ctx.workspaceId, body.projectId, body.taskId, body.tagId);
+    if (validationError) return json({ error: validationError }, 400);
     // Stop any existing running entry first
     const existing = await prisma.timeEntry.findFirst({ where: { workspaceId: ctx.workspaceId, userId: ctx.userId, endedAt: null }, orderBy: { startedAt: 'desc' } });
     if (existing) {
@@ -95,6 +113,8 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
     if (policy?.forceTimer) return json({ error: 'force_timer_enabled' }, 403);
     const body = (await readJson(req)) as { userId?: string; description?: string; startedAt?: string; endedAt?: string; billable?: boolean; projectId?: string; taskId?: string; tagId?: string };
     if (!body.userId || !body.startedAt || !body.endedAt) return json({ error: 'invalid_payload' }, 400);
+    const validationError = await validateTimeEntryRelations(ctx.workspaceId, body.projectId, body.taskId, body.tagId);
+    if (validationError) return json({ error: validationError }, 400);
     const entry = await prisma.timeEntry.create({ data: { workspaceId: ctx.workspaceId, userId: body.userId, description: body.description || 'Manual entry', startedAt: new Date(body.startedAt), endedAt: new Date(body.endedAt), billable: Boolean(body.billable), projectId: body.projectId || null, taskId: body.taskId || null, tagId: body.tagId || null } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'time_entry.manual_create', targetType: 'time_entry', targetId: entry.id });
     return json({ entry }, 201);
@@ -107,6 +127,8 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
     const body = (await readJson(req)) as { description?: string; startedAt?: string; endedAt?: string; billable?: boolean; projectId?: string; taskId?: string; tagId?: string };
     const existing = await prisma.timeEntry.findFirst({ where: { id: entryId, workspaceId: ctx.workspaceId } });
     if (!existing) return json({ error: 'not_found' }, 404);
+    const validationError = await validateTimeEntryRelations(ctx.workspaceId, body.projectId, body.taskId, body.tagId);
+    if (validationError) return json({ error: validationError }, 400);
     const entry = await prisma.timeEntry.update({
       where: { id: entryId },
       data: {

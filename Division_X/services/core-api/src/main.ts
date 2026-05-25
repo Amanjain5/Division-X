@@ -1,6 +1,9 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyWebsocket from '@fastify/websocket';
+import compress from '@fastify/compress';
+import etag from '@fastify/etag';
+import rateLimit from '@fastify/rate-limit';
 import { configureFastify } from './core/fastify-types.js';
 import { authenticate } from './core/http.js';
 import { samlProvider } from './core/sso.js';
@@ -17,6 +20,7 @@ import { policyRoutes } from './modules/policy/routes.js';
 import { reportingRoutes } from './modules/reporting/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { attendanceRoutes } from './modules/attendance/routes.js';
+import { activityRoutes } from './modules/activity/routes.js';
 
 const app = Fastify({ logger: true });
 
@@ -48,6 +52,25 @@ await app.register(cors, {
 
 // Register Fastify Websocket Plugin
 await app.register(fastifyWebsocket);
+
+// Register Compression Plugin for Brotli/Gzip content encoding
+await app.register(compress, { global: true });
+
+// Register ETag Plugin for automatic 304 browser caching
+await app.register(etag);
+
+// Register dynamic Rate Limiting for security and threat resilience
+await app.register(rateLimit, {
+  global: true,
+  timeWindow: '1 minute',
+  max: (req) => {
+    const url = req.url;
+    if (url.includes('/v1/auth/login')) return 10;
+    if (url.includes('/v1/auth/signup')) return 5;
+    if (url.includes('/v1/auth/forgot-password')) return 3;
+    return 200;
+  }
+});
 
 // Register real-time WebSocket endpoint for Admins/Owners
 app.get('/v1/notifications/ws', { websocket: true }, (socket, req) => {
@@ -209,68 +232,85 @@ app.post('/v1/auth/sso/callback', async (req, reply) => {
   }
 });
 
-// Adapt standard Request/Response handlers
-const modularHandlers = [
-  authRoutes,
-  workspaceRoutes,
-  catalogRoutes,
-  timeRoutes,
-  productivityTimeRoutes,
-  policyRoutes,
-  reportingRoutes,
-  auditRoutes,
-  attendanceRoutes
-];
+// Register standard route prefix handlers
+const routePrefixes: Record<string, any> = {
+  '/v1/auth': authRoutes,
+  '/v1/workspace': workspaceRoutes,
+  '/v1/teams': workspaceRoutes,
+  '/v1/projects': catalogRoutes,
+  '/v1/tasks': catalogRoutes,
+  '/v1/tags': catalogRoutes,
+  '/v1/clients': catalogRoutes,
+  '/v1/timer': timeRoutes,
+  '/v1/time-entries': timeRoutes,
+  '/v1/break': productivityTimeRoutes,
+  '/v1/pomodoro': productivityTimeRoutes,
+  '/v1/time': productivityTimeRoutes,
+  '/v1/policies': policyRoutes,
+  '/v1/reports': reportingRoutes,
+  '/v1/audit': auditRoutes,
+  '/v1/attendance': attendanceRoutes,
+  '/v1/activity': activityRoutes
+};
+
+// Public health endpoint registered directly on Fastify
+app.get('/health', async () => {
+  return { status: 'healthy', timestamp: new Date().toISOString() };
+});
 
 const methods: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'> = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-for (const method of methods) {
-  app.route({
-    method,
-    url: '/*',
-    handler: async (req, reply) => {
-      const port = Number(process.env.CORE_API_PORT || 5000);
-      const host = req.headers.host || req.hostname || 'localhost';
-      const requestUrl = host.includes(':') ? `http://${host}${req.url}` : `http://${host}:${port}${req.url}`;
-      
-      // Sanitise headers to prevent Fetch Request constructor validation errors
-      const sanitizedHeaders = new Headers();
-      for (const [key, val] of Object.entries(req.headers)) {
-        if (val === undefined) continue;
-        const lowerKey = key.toLowerCase();
-        if (['content-length', 'host', 'connection', 'keep-alive'].includes(lowerKey)) {
-          continue;
+for (const [prefix, handler] of Object.entries(routePrefixes)) {
+  for (const method of methods) {
+    app.route({
+      method,
+      url: `${prefix}*`,
+      handler: async (req, reply) => {
+        const port = Number(process.env.CORE_API_PORT || 5000);
+        const host = req.headers.host || req.hostname || 'localhost';
+        const requestUrl = host.includes(':') ? `http://${host}${req.url}` : `http://${host}:${port}${req.url}`;
+        
+        // Sanitise headers to prevent Fetch Request constructor validation errors
+        const sanitizedHeaders = new Headers();
+        for (const [key, val] of Object.entries(req.headers)) {
+          if (val === undefined) continue;
+          const lowerKey = key.toLowerCase();
+          if (['content-length', 'host', 'connection', 'keep-alive'].includes(lowerKey)) {
+            continue;
+          }
+          if (Array.isArray(val)) {
+            for (const v of val) sanitizedHeaders.append(key, v);
+          } else {
+            sanitizedHeaders.set(key, val);
+          }
         }
-        if (Array.isArray(val)) {
-          for (const v of val) sanitizedHeaders.append(key, v);
-        } else {
-          sanitizedHeaders.set(key, val);
+
+        // Safe body extraction: NEVER pass body for GET/HEAD methods (throws TypeError in Web standards)
+        const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+        let requestBody: any = undefined;
+        if (hasBody && req.body) {
+          requestBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
         }
-      }
 
-      // Safe body extraction: NEVER pass body for GET/HEAD methods (throws TypeError in Web standards)
-      const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-      let requestBody: any = undefined;
-      if (hasBody && req.body) {
-        requestBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      }
+        // Construct standard Fetch Request object
+        const request = new Request(requestUrl, {
+          method: req.method,
+          headers: sanitizedHeaders,
+          ...(hasBody && requestBody ? { body: requestBody } : {})
+        });
 
-      // Construct standard Fetch Request object
-      const request = new Request(requestUrl, {
-        method: req.method,
-        headers: sanitizedHeaders,
-        ...(hasBody && requestBody ? { body: requestBody } : {})
-      });
-
-      const url = new URL(requestUrl);
-      const requiredPermission = getRequiredPermission(req.method, url.pathname);
-      if (requiredPermission && req.ctx) {
-        if (!hasPermission(req.ctx.role, requiredPermission)) {
-          return reply.status(403).send({ error: 'forbidden', message: `missing_permission: ${requiredPermission}` });
+        // Serialization bypass: cache parsed body directly on adapted standard Request object
+        if (req.body) {
+          (request as any).parsedBody = req.body;
         }
-      }
 
-      // Loop through existing modular handlers
-      for (const handler of modularHandlers) {
+        const url = new URL(requestUrl);
+        const requiredPermission = getRequiredPermission(req.method, url.pathname);
+        if (requiredPermission && req.ctx) {
+          if (!hasPermission(req.ctx.role, requiredPermission)) {
+            return reply.status(403).send({ error: 'forbidden', message: `missing_permission: ${requiredPermission}` });
+          }
+        }
+
         try {
           const response = await handler(request, req.ctx);
           if (response) {
@@ -282,14 +322,44 @@ for (const method of methods) {
           }
         } catch (err) {
           app.log.error(err);
-          return reply.status(500).send({ error: 'internal_server_error', details: String(err) });
+          return reply.status(500).send({ error: 'internal_server_error', message: 'An unexpected error occurred' });
         }
-      }
 
-      return reply.status(404).send({ error: 'not_found' });
-    }
-  });
+        // Overlapping prefix check: if `/v1/timer` is not processed by timeRoutes, fall back to productivityTimeRoutes
+        if (prefix === '/v1/timer') {
+          try {
+            const response = await productivityTimeRoutes(request, req.ctx);
+            if (response) {
+              reply.status(response.status);
+              for (const [key, val] of response.headers.entries()) {
+                reply.header(key, val);
+              }
+              return reply.send(await response.text());
+            }
+          } catch (err) {
+            app.log.error(err);
+            return reply.status(500).send({ error: 'internal_server_error', message: 'An unexpected error occurred' });
+          }
+        }
+
+        return reply.status(404).send({ error: 'not_found' });
+      }
+    });
+  }
 }
+
+// High-resolution API latency logging hooks
+app.addHook('onRequest', async (req) => {
+  (req as any).startTime = process.hrtime();
+});
+app.addHook('onResponse', async (req, reply) => {
+  const start = (req as any).startTime;
+  if (start) {
+    const diff = process.hrtime(start);
+    const durationMs = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+    app.log.info(`⏱️ [API LATENCY] ${req.method} ${req.url} - ${reply.statusCode} - ${durationMs}ms`);
+  }
+});
 
 const port = Number(process.env.CORE_API_PORT || 5000);
 app.listen({ port, host: '0.0.0.0' }, (err) => {

@@ -181,6 +181,18 @@ export async function getWorkspace(): Promise<{ workspaceId: string; workspaceNa
   return api('/v1/workspace/me');
 }
 
+export async function getWorkspaceBootstrap(): Promise<{
+  workspace: { id: string; name: string; timezone: string; customDomain: string | null };
+  role: string;
+  members: Array<{ id: string; email: string; name: string; role: string }>;
+  projects: any[];
+  runningTimer: any | null;
+  attendance: any | null;
+  policy: any;
+}> {
+  return api('/v1/workspace/bootstrap');
+}
+
 export async function updateWorkspace(data: { name?: string; timezone?: string }): Promise<{ workspace: any }> {
   return api('/v1/workspace', { method: 'PATCH', body: JSON.stringify(data) });
 }
@@ -312,4 +324,37 @@ export async function getTodayAttendance(): Promise<{ attendance: any | null }> 
 
 export async function reportIdle(): Promise<{ success: boolean }> {
   return api('/v1/time/idle', { method: 'POST' });
+}
+
+// --- Activity Monitoring ---
+export async function getActivityTimeline(userId?: string, date?: string): Promise<{
+  date: string;
+  userId: string;
+  timeline: Array<{ start: string; end: string; state: 'ACTIVE' | 'BREAK' | 'IDLE' | 'OFFLINE'; durationMinutes: number; metadata?: any }>;
+  policy: { autoPauseOnIdle: boolean; idleMinutes: number };
+}> {
+  const q = new URLSearchParams();
+  if (userId) q.set('userId', userId);
+  if (date) q.set('date', date);
+  const suffix = q.toString() ? `?${q.toString()}` : '';
+  return api(`/v1/activity/timeline${suffix}`);
+}
+
+export async function getActivityMetrics(userId?: string): Promise<{
+  userId: string;
+  metrics: {
+    weeklyActiveHours: number;
+    weeklyIdleHours: number;
+    weeklyBreakHours: number;
+    efficiencyIndex: number;
+    breakRatio: number;
+    consecutiveActiveMinutes: number;
+    breakNudge: boolean;
+    breakNudgeMessage: string;
+  };
+}> {
+  const q = new URLSearchParams();
+  if (userId) q.set('userId', userId);
+  const suffix = q.toString() ? `?${q.toString()}` : '';
+  return api(`/v1/activity/metrics${suffix}`);
 }

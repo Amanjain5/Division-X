@@ -168,19 +168,21 @@ async function sendEmailAlerts(workspaceId: string, actorUserId: string, title: 
 </html>
   `;
 
-  for (const admin of admins) {
-    if (!admin.user || !admin.user.email) continue;
-    try {
-      await mailer.sendMail({
-        from,
-        to: admin.user.email,
-        subject: `[TheTime Alert] ${actorName} - ${title}`,
-        text: `Activity Alert: ${actorName} in ${workspaceName} - ${title}: ${message}`,
-        html: htmlContent
-      });
-      console.log(`✉️ Email alert sent to admin: ${admin.user.email}`);
-    } catch (err) {
-      console.error(`❌ Failed to send email alert to admin ${admin.user.email}:`, err);
-    }
-  }
+  await Promise.allSettled(
+    admins.map(async (admin) => {
+      if (!admin.user || !admin.user.email) return;
+      try {
+        await mailer.sendMail({
+          from,
+          to: admin.user.email,
+          subject: `[TheTime Alert] ${actorName} - ${title}`,
+          text: `Activity Alert: ${actorName} in ${workspaceName} - ${title}: ${message}`,
+          html: htmlContent
+        });
+        console.log(`✉️ Email alert sent to admin: ${admin.user.email}`);
+      } catch (err) {
+        console.error(`❌ Failed to send email alert to admin ${admin.user.email}:`, err);
+      }
+    })
+  );
 }

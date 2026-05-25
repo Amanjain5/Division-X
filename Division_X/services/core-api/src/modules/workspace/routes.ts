@@ -22,6 +22,36 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     });
   }
 
+  // --- Consolidated Workspace Bootstrap ---
+  if (req.method === 'GET' && url.pathname === '/v1/workspace/bootstrap') {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [workspace, members, projects, runningTimer, attendance, policy] = await Promise.all([
+      prisma.workspace.findUnique({ where: { id: ctx.workspaceId } }),
+      prisma.workspaceMember.findMany({ where: { workspaceId: ctx.workspaceId }, include: { user: true } }),
+      prisma.project.findMany({ where: { workspaceId: ctx.workspaceId }, include: { client: true }, orderBy: { name: 'asc' } }),
+      prisma.timeEntry.findFirst({ where: { workspaceId: ctx.workspaceId, userId: ctx.userId, endedAt: null }, orderBy: { startedAt: 'desc' }, include: { project: true } }),
+      prisma.attendanceLog.findFirst({ where: { workspaceId: ctx.workspaceId, userId: ctx.userId, date: today } }),
+      prisma.workspacePolicy.findFirst({ where: { workspaceId: ctx.workspaceId } })
+    ]);
+
+    return json({
+      workspace: {
+        id: ctx.workspaceId,
+        name: workspace?.name || '',
+        timezone: workspace?.timezone || 'UTC',
+        customDomain: workspace?.customDomain || null
+      },
+      role: ctx.role,
+      members: members.map((m: any) => ({ id: m.userId, email: m.user.email, name: m.user.name, role: m.role })),
+      projects: projects,
+      runningTimer: runningTimer || null,
+      attendance: attendance || null,
+      policy: policy || { forceTimer: false, idleMinutes: 10, overtimeHours: 8, pomodoroMinutes: 25, breakMinutes: 5, longRunningMinutes: 480, reminderEnabled: true, weekStartDay: 1 }
+    });
+  }
+
   // --- Update workspace ---
   if (req.method === 'PATCH' && url.pathname === '/v1/workspace') {
     if (!hasRole(ctx.role, ['OWNER', 'ADMIN'])) return json({ error: 'forbidden' }, 403);
@@ -60,15 +90,13 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
     const timers = await prisma.timeEntry.findMany({
       where: { workspaceId: ctx.workspaceId, endedAt: null },
       orderBy: { startedAt: 'desc' },
-      include: { project: true }
+      include: {
+        project: true,
+        user: { select: { id: true, email: true, name: true } }
+      }
     });
-    // Enrich with user info
-    const userIds = [...new Set(timers.map((t: any) => t.userId))];
-    const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, email: true, name: true } });
-    const userMap = Object.fromEntries(users.map((u: any) => [u.id, u]));
     const items = timers.map((t: any) => ({
       ...t,
-      user: userMap[t.userId] || { id: t.userId, email: 'unknown' },
       runningMinutes: Math.floor((Date.now() - t.startedAt.getTime()) / 60000)
     }));
     return json({ items });

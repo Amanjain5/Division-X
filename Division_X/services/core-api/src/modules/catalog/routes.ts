@@ -16,6 +16,10 @@ export async function catalogRoutes(req: Request, ctx: RequestContext): Promise<
   if (req.method === 'POST' && url.pathname === '/v1/projects') {
     if (!canManage) return json({ error: 'forbidden' }, 403);
     const b = (await readJson(req)) as { name?: string; color?: string; clientId?: string };
+    if (b.clientId) {
+      const client = await prisma.client.findFirst({ where: { id: b.clientId, workspaceId: ctx.workspaceId } });
+      if (!client) return json({ error: 'invalid_client_reference' }, 400);
+    }
     const item = await prisma.project.create({ data: { workspaceId: ctx.workspaceId, name: b.name || 'Untitled', color: b.color || '#059669', clientId: b.clientId || null } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'project.create', targetType: 'project', targetId: item.id });
     return json({ item }, 201);
@@ -23,7 +27,13 @@ export async function catalogRoutes(req: Request, ctx: RequestContext): Promise<
   if (req.method === 'PATCH' && url.pathname.startsWith('/v1/projects/')) {
     if (!canManage) return json({ error: 'forbidden' }, 403);
     const id = url.pathname.split('/').pop()!;
+    const existing = await prisma.project.findFirst({ where: { id, workspaceId: ctx.workspaceId } });
+    if (!existing) return json({ error: 'not_found' }, 404);
     const b = (await readJson(req)) as { name?: string; color?: string; clientId?: string; archived?: boolean };
+    if (b.clientId) {
+      const client = await prisma.client.findFirst({ where: { id: b.clientId, workspaceId: ctx.workspaceId } });
+      if (!client) return json({ error: 'invalid_client_reference' }, 400);
+    }
     const item = await prisma.project.update({ where: { id }, data: { ...(b.name ? { name: b.name } : {}), ...(b.color ? { color: b.color } : {}), ...(b.clientId !== undefined ? { clientId: b.clientId || null } : {}), ...(b.archived !== undefined ? { archived: b.archived } : {}) } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'project.update', targetType: 'project', targetId: item.id, metadata: b });
     return json({ item });
@@ -51,6 +61,10 @@ export async function catalogRoutes(req: Request, ctx: RequestContext): Promise<
   }
   if (req.method === 'POST' && url.pathname === '/v1/tasks') {
     const b = (await readJson(req)) as { name?: string; projectId?: string; status?: string; priority?: string };
+    if (b.projectId) {
+      const project = await prisma.project.findFirst({ where: { id: b.projectId, workspaceId: ctx.workspaceId } });
+      if (!project) return json({ error: 'invalid_project_reference' }, 400);
+    }
     const item = await prisma.task.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, name: b.name || 'Untitled', projectId: b.projectId || null, status: b.status || 'To Do', priority: b.priority || 'Low' } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'task.create', targetType: 'task', targetId: item.id });
     await sendGlobalNotification(ctx.workspaceId, ctx.userId, 'Task Created', `Created a new task: "${item.name}"`);
@@ -62,6 +76,10 @@ export async function catalogRoutes(req: Request, ctx: RequestContext): Promise<
     if (!existing) return json({ error: 'not_found' }, 404);
     if (!canManage && existing.userId !== ctx.userId) return json({ error: 'forbidden' }, 403);
     const b = (await readJson(req)) as { name?: string; projectId?: string; status?: string; priority?: string };
+    if (b.projectId) {
+      const project = await prisma.project.findFirst({ where: { id: b.projectId, workspaceId: ctx.workspaceId } });
+      if (!project) return json({ error: 'invalid_project_reference' }, 400);
+    }
     const item = await prisma.task.update({ where: { id }, data: { ...(b.name ? { name: b.name } : {}), ...(b.projectId !== undefined ? { projectId: b.projectId || null } : {}), ...(b.status ? { status: b.status } : {}), ...(b.priority ? { priority: b.priority } : {}) } });
     await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'task.update', targetType: 'task', targetId: item.id, metadata: b });
     return json({ item });

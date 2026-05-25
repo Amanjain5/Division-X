@@ -9,7 +9,7 @@ export async function policyRoutes(req: Request, ctx: RequestContext): Promise<R
 
   if (req.method === 'GET' && url.pathname === '/v1/policies') {
     const policy = await prisma.workspacePolicy.findFirst({ where: { workspaceId: ctx.workspaceId } });
-    return json(policy || { forceTimer: false, idleMinutes: 10, overtimeHours: 8, pomodoroMinutes: 25, breakMinutes: 5, longRunningMinutes: 480, reminderEnabled: true, weekStartDay: 1 });
+    return json(policy || { forceTimer: false, idleMinutes: 10, overtimeHours: 8, pomodoroMinutes: 25, breakMinutes: 5, longRunningMinutes: 480, reminderEnabled: true, autoPauseOnIdle: false, weekStartDay: 1 });
   }
 
   if (req.method === 'PATCH' && url.pathname === '/v1/policies') {
@@ -17,7 +17,7 @@ export async function policyRoutes(req: Request, ctx: RequestContext): Promise<R
     const body = (await readJson(req)) as {
       forceTimer?: boolean; idleMinutes?: number; overtimeHours?: number;
       pomodoroMinutes?: number; breakMinutes?: number; longRunningMinutes?: number;
-      reminderEnabled?: boolean; weekStartDay?: number;
+      reminderEnabled?: boolean; autoPauseOnIdle?: boolean; weekStartDay?: number;
     };
     const existing = await prisma.workspacePolicy.findFirst({ where: { workspaceId: ctx.workspaceId } });
     if (!existing) {
@@ -31,6 +31,7 @@ export async function policyRoutes(req: Request, ctx: RequestContext): Promise<R
           breakMinutes: body.breakMinutes ?? 5,
           longRunningMinutes: body.longRunningMinutes ?? 480,
           reminderEnabled: body.reminderEnabled ?? true,
+          autoPauseOnIdle: body.autoPauseOnIdle ?? false,
           weekStartDay: body.weekStartDay ?? 1
         }
       });

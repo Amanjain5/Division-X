@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { AppShell } from '../../components/app-shell';
 import { Toast } from '../../components/toast';
 import {
@@ -17,11 +17,70 @@ function formatDuration(ms: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-
-
 const KANBAN_STATUSES = ['To Do', 'In Progress', 'In Review', 'Blocked', 'Completed'];
 
 type Mode = 'timer' | 'pomodoro';
+
+// Leaf Active Timer Clock component to isolate 1000ms re-render ticks from the parent board
+interface ActiveTimerBannerProps {
+  running: any;
+  onBreak: boolean;
+  frozenElapsed: string | null;
+  totalBreakMs: number;
+  toggleBreak: () => void;
+  onStop: () => void;
+}
+
+function ActiveTimerBanner({
+  running,
+  onBreak,
+  frozenElapsed,
+  totalBreakMs,
+  toggleBreak,
+  onStop,
+}: ActiveTimerBannerProps) {
+  const [elapsed, setElapsed] = useState('00:00:00');
+
+  useEffect(() => {
+    let intervalId: any = null;
+    if (running && !onBreak) {
+      const tick = () => {
+        const ms = Date.now() - new Date(running.startedAt).getTime() - totalBreakMs;
+        setElapsed(formatDuration(Math.max(0, ms)));
+      };
+      tick();
+      intervalId = setInterval(tick, 1000);
+    } else {
+      setElapsed('00:00:00');
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [running, onBreak, totalBreakMs]);
+
+  if (!running) return null;
+
+  return (
+    <div className="card card-dark mb-6">
+      {onBreak && (
+        <div style={{ background: '#F59E0B', color: 'white', padding: '8px 16px', borderRadius: 'var(--radius-sm)', marginBottom: 12, fontWeight: 600, textAlign: 'center', fontSize: '0.9rem' }}>
+          ☕ On Break — Timer paused
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>Currently tracking:</span>
+          <strong style={{ fontSize: '1.1rem', color: 'white' }}>{running.description}</strong>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, color: onBreak ? '#F59E0B' : 'white' }}>{frozenElapsed || elapsed}</div>
+          <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.85rem' }} onClick={toggleBreak}>{onBreak ? '☕ End Break' : '☕ Break'}</button>
+          <button className="btn btn-danger" onClick={onStop}>■ Stop</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TrackerPage() {
   const [description, setDescription] = useState('');
@@ -37,11 +96,8 @@ export default function TrackerPage() {
   const [filterPriority, setFilterPriority] = useState('All');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [running, setRunning] = useState<any | null>(null);
-  const [elapsed, setElapsed] = useState('00:00:00');
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const role = typeof window !== 'undefined' ? getCurrentRole() : 'MEMBER';
-  const canEdit = ['OWNER', 'ADMIN', 'MANAGER'].includes(role);
 
   // Pomodoro state
   const [mode, setMode] = useState<Mode>('timer');
@@ -65,18 +121,40 @@ export default function TrackerPage() {
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [idleMinutes, setIdleMinutes] = useState(10);
 
+  // Load project and task catalogs once on mount
+  useEffect(() => {
+    async function loadMetadata() {
+      try {
+        const [proj, tks] = await Promise.all([
+          getCatalog('projects'),
+          getCatalog('tasks')
+        ]);
+        setProjects(proj.items);
+        setMyTasks(tks.items);
+      } catch {
+        setToast({ text: 'Failed to load workspace metadata', type: 'error' });
+      }
+    }
+    loadMetadata();
+  }, []);
+
+  // Dedicated task reloader called only on structural task mutations
+  const reloadTasks = useCallback(async () => {
+    try {
+      const tks = await getCatalog('tasks');
+      setMyTasks(tks.items);
+    } catch {}
+  }, []);
+
+  // Fetch only transactional entries and live timer status
   const refresh = useCallback(async () => {
     try {
       const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('thetime_user_id') || undefined : undefined;
-      const [entries, timer, proj, tks] = await Promise.all([
+      const [entries, timer] = await Promise.all([
         getTimeEntries({ pageSize: 200, userId: currentUserId }),
-        getRunningTimer(),
-        getCatalog('projects'),
-        getCatalog('tasks')
+        getRunningTimer()
       ]);
       setItems(entries.items);
-      setProjects(proj.items);
-      setMyTasks(tks.items);
       if (timer.running && timer.entry) {
         setRunning(timer.entry);
         setDescription(timer.entry.description || '');
@@ -131,30 +209,15 @@ export default function TrackerPage() {
   // Request browser notification permission
   useEffect(() => { requestNotificationPermission(); }, []);
 
-  // Live timer
+  // Freeze elapsed timer display if on break
   useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (running && !onBreak) {
-      const tick = () => {
-        const ms = Date.now() - new Date(running.startedAt).getTime() - totalBreakMsRef.current;
-        setElapsed(formatDuration(Math.max(0, ms)));
-      };
-      tick();
-      timerRef.current = setInterval(tick, 1000);
-    } else if (!running) {
-      setElapsed('00:00:00');
-      setFrozenElapsed(null);
-      totalBreakMsRef.current = 0;
-    }
     if (onBreak && running) {
       const ms = Date.now() - new Date(running.startedAt).getTime() - totalBreakMsRef.current;
       setFrozenElapsed(formatDuration(Math.max(0, ms)));
-    }
-    if (!onBreak) {
+    } else {
       setFrozenElapsed(null);
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [running, onBreak]);
+  }, [onBreak, running]);
 
   // Idle detection: reset on any user activity, fire after idleMinutes of inactivity while timer is running
   useEffect(() => {
@@ -192,7 +255,7 @@ export default function TrackerPage() {
     check();
     const interval = setInterval(check, 60000);
     return () => clearInterval(interval);
-  }, [running]);
+  }, [running, longRunAlert]);
 
   // Pomodoro timer
   useEffect(() => {
@@ -200,8 +263,8 @@ export default function TrackerPage() {
     if (pomodoroActive && pomodoroStartTime) {
       const totalMs = (pomodoroPhase === 'focus' ? pomodoroFocus : pomodoroBreak) * 60 * 1000;
       const tick = () => {
-        const elapsed = Date.now() - pomodoroStartTime;
-        const remaining = Math.max(0, totalMs - elapsed);
+        const elapsedMs = Date.now() - pomodoroStartTime;
+        const remaining = Math.max(0, totalMs - elapsedMs);
         const m = Math.floor(remaining / 60000);
         const s = Math.floor((remaining % 60000) / 1000);
         setPomodoroElapsed(`${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
@@ -211,7 +274,6 @@ export default function TrackerPage() {
             setPomodoroStartTime(Date.now());
             setToast({ text: '🍅 Focus done! Take a break.', type: 'success' });
             notifyCritical('🍅 Pomodoro — Focus Complete', 'Great work! Time for a break.', 'pomo-focus');
-            // Auto-start break
             startBreak().catch(() => {});
             setOnBreak(true);
           } else {
@@ -252,8 +314,6 @@ export default function TrackerPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [running, description, projectId, billable, refresh, onBreak, pomodoroActive]);
 
-
-
   async function onStartTask(task: any) {
     try {
       await startTimer({ description: task.name, taskId: task.id, projectId: task.projectId || undefined, billable });
@@ -269,12 +329,32 @@ export default function TrackerPage() {
       setNewTaskPriority('Low');
       setNewTaskProject('');
       setShowNewTask(false);
-      await refresh();
+      await reloadTasks();
       setToast({ text: 'Task created', type: 'success' });
     } catch { setToast({ text: 'Failed to create task', type: 'error' }); }
   }
 
-  const filteredTasks = filterPriority === 'All' ? myTasks : myTasks.filter(t => t.priority === filterPriority);
+  const filteredTasks = useMemo(() => {
+    return filterPriority === 'All' ? myTasks : myTasks.filter(t => t.priority === filterPriority);
+  }, [myTasks, filterPriority]);
+
+  // Memoize task tracked durations to avoid expensive array reductions in the main rendering loop
+  const taskDurations = useMemo(() => {
+    const durationMap: Record<string, number> = {};
+    const now = Date.now();
+    for (const item of items) {
+      if (!item.taskId) continue;
+      const start = new Date(item.startedAt).getTime();
+      const end = item.endedAt ? new Date(item.endedAt).getTime() : now;
+      durationMap[item.taskId] = (durationMap[item.taskId] || 0) + (end - start);
+    }
+    return durationMap;
+  }, [items]);
+
+  function getTaskTrackedTime(taskId: string) {
+    const ms = taskDurations[taskId] || 0;
+    return formatDuration(ms);
+  }
 
   function handleDragStart(e: React.DragEvent, taskId: string) {
     setDraggedTaskId(taskId);
@@ -298,17 +378,11 @@ export default function TrackerPage() {
     
     try {
       await updateCatalog('tasks', taskId, { status });
-      await refresh();
+      await reloadTasks();
     } catch {
       setToast({ text: 'Failed to update task status', type: 'error' });
-      await refresh();
+      await reloadTasks();
     }
-  }
-
-  function getTaskTrackedTime(taskId: string) {
-    const taskEntries = items.filter(i => i.taskId === taskId);
-    const ms = taskEntries.reduce((sum, i) => sum + ((i.endedAt ? new Date(i.endedAt).getTime() : Date.now()) - new Date(i.startedAt).getTime()), 0);
-    return formatDuration(ms);
   }
 
   async function onStop() {
@@ -320,12 +394,9 @@ export default function TrackerPage() {
     } catch { setToast({ text: 'Failed to stop timer', type: 'error' }); }
   }
 
-
-
   async function toggleBreak() {
     try {
       if (onBreak) {
-        // Accumulate break duration
         totalBreakMsRef.current += Date.now() - breakStartRef.current;
         await stopBreak();
         setOnBreak(false);
@@ -355,8 +426,6 @@ export default function TrackerPage() {
       }
     }
   }
-
-
 
   return (
     <AppShell title="Time Tracker">
@@ -411,7 +480,6 @@ export default function TrackerPage() {
           >{onBreak ? '☕ End Break' : '☕ Take Break'}</button>
         )}
 
-
         {mode === 'pomodoro' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
             {pomodoroActive ? (
@@ -440,34 +508,22 @@ export default function TrackerPage() {
         </div>
       </div>
 
-      {/* Running Task Banner — only visible when a timer is active */}
-      {running && (
-        <div className="card card-dark mb-6">
-          {onBreak && (
-            <div style={{ background: '#F59E0B', color: 'white', padding: '8px 16px', borderRadius: 'var(--radius-sm)', marginBottom: 12, fontWeight: 600, textAlign: 'center', fontSize: '0.9rem' }}>
-              ☕ On Break — Timer paused
-            </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>Currently tracking:</span>
-              <strong style={{ fontSize: '1.1rem', color: 'white' }}>{running.description}</strong>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, color: onBreak ? '#F59E0B' : 'white' }}>{frozenElapsed || elapsed}</div>
-              <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem' }} onClick={toggleBreak}>{onBreak ? '☕ End Break' : '☕ Break'}</button>
-              <button className="btn btn-danger" onClick={onStop}>■ Stop</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Ticking live clock isolated cleanly inside leaf element to avoid O(N*M) page refreshes */}
+      <ActiveTimerBanner
+        running={running}
+        onBreak={onBreak}
+        frozenElapsed={frozenElapsed}
+        totalBreakMs={totalBreakMsRef.current}
+        toggleBreak={toggleBreak}
+        onStop={onStop}
+      />
 
       {/* Kanban Board */}
       <div style={{ padding: '0' }}>
         {/* Board Header — filters & new task */}
         <div className="card mb-4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Task Board</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {/* Priority Filter */}
             <select className="select select-sm" style={{ minWidth: 140 }} value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
               <option value="All">All Priorities</option>

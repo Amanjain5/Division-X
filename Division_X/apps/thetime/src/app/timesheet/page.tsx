@@ -102,17 +102,33 @@ export default function TimesheetPage() {
     return { start, end };
   }, [gridDays]);
 
+  // Load static workspace and tags metadata once on mount
+  useEffect(() => {
+    async function loadMetadata() {
+      try {
+        const [workspaceData, tagsData] = await Promise.all([
+          getWorkspace(),
+          getCatalog('tags')
+        ]);
+        setMembers(workspaceData.members);
+        setAllTags(tagsData.items);
+      } catch {
+        setToast({ text: 'Failed to load workspace metadata', type: 'error' });
+      }
+    }
+    loadMetadata();
+  }, []);
+
+  // Load time entries only when query bounds change
   const refresh = useCallback(async () => {
     if (!queryBounds) return;
     try {
-      const [entriesData, workspaceData, tagsData] = await Promise.all([
-        getTimeEntries({ from: queryBounds.start.toISOString(), to: queryBounds.end.toISOString(), pageSize: 1000 }),
-        getWorkspace(),
-        getCatalog('tags')
-      ]);
+      const entriesData = await getTimeEntries({
+        from: queryBounds.start.toISOString(),
+        to: queryBounds.end.toISOString(),
+        pageSize: 1000
+      });
       setItems(entriesData.items);
-      setMembers(workspaceData.members);
-      setAllTags(tagsData.items);
     } catch {
       setToast({ text: 'Failed to load timeline data', type: 'error' });
     }

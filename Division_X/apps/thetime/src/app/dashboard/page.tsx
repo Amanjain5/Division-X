@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { AppShell } from '../../components/app-shell';
-import { getReport, getPolicies, getRunningTimer, getTimeEntries, getCurrentRole, getActivityReport, clockInAttendance } from '@divisionx/api-client';
+import { getReport, getTimeEntries, getCurrentRole, getActivityReport, clockInAttendance, getWorkspaceBootstrap } from '@divisionx/api-client';
 import { requestNotificationPermission, notifyCritical } from '../../components/notification-manager';
 
 function formatDuration(ms: number): string {
@@ -32,17 +32,16 @@ export default function DashboardPage() {
       const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay() + 1); weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
 
-      const [report, pol, timer, entries, att] = await Promise.all([
+      const [report, bootstrap, entries, att] = await Promise.all([
         getReport({ from: weekStart.toISOString(), to: weekEnd.toISOString() }),
-        getPolicies(),
-        getRunningTimer(),
+        getWorkspaceBootstrap(),
         getTimeEntries({ pageSize: 5 }),
         clockInAttendance()
       ]);
 
       setStats({ totalHours: report.totalHours, billableHours: report.billableHours || 0, itemsCount: report.itemsCount, approvedCount: report.approvedCount || 0 });
-      setPolicy(pol);
-      setRunning(timer.running ? timer.entry : null);
+      setPolicy(bootstrap.policy);
+      setRunning(bootstrap.runningTimer);
       setRecentEntries(entries.items.slice(0, 5));
       setAttendance(att.attendance);
 

@@ -41,10 +41,20 @@ export async function reportingRoutes(req: Request, ctx: RequestContext): Promis
       ...(from || to ? { startedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {})
     };
 
-    const [items, totalItems, allForTotal] = await Promise.all([
+    const [items, totalItems, allForTotal, projects] = await Promise.all([
       prisma.timeEntry.findMany({ where, orderBy: { startedAt: 'desc' }, skip, take: pageSize, include: { project: true, task: true } }),
       prisma.timeEntry.count({ where }),
-      prisma.timeEntry.findMany({ where, include: { project: true } })
+      prisma.timeEntry.findMany({
+        where,
+        select: {
+          startedAt: true,
+          endedAt: true,
+          billable: true,
+          approved: true,
+          projectId: true
+        }
+      }),
+      prisma.project.findMany({ where: { workspaceId: ctx.workspaceId } })
     ]);
 
     const totalMs = allForTotal.reduce((sum: number, i: any) => sum + ((i.endedAt?.getTime() || Date.now()) - i.startedAt.getTime()), 0);
@@ -54,10 +64,19 @@ export async function reportingRoutes(req: Request, ctx: RequestContext): Promis
     // Optional grouping
     let grouped: any = null;
     if (groupBy === 'project') {
+      const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
       const map: Record<string, { name: string; hours: number; count: number; color: string }> = {};
-      for (const e of allForTotal as any[]) {
+      for (const e of allForTotal) {
         const key = e.projectId || 'unassigned';
-        if (!map[key]) map[key] = { name: e.project?.name || 'No Project', hours: 0, count: 0, color: e.project?.color || '#6B7280' };
+        if (!map[key]) {
+          const proj = e.projectId ? projectMap[e.projectId] : null;
+          map[key] = {
+            name: proj?.name || 'No Project',
+            hours: 0,
+            count: 0,
+            color: proj?.color || '#6B7280'
+          };
+        }
         map[key].hours += durationHours(e.startedAt, e.endedAt);
         map[key].count++;
       }
