@@ -15,10 +15,65 @@ async function issueSession(userId: string, workspaceId: string, role: 'OWNER' |
 
 export async function authRoutes(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
-
   if (req.method === 'POST' && url.pathname === '/v1/auth/signup') {
     const body = (await readJson(req)) as { email?: string; password?: string; name?: string; workspaceName?: string };
     if (!body.email || !body.password || !body.workspaceName) return json({ error: 'invalid_payload' }, 400);
+
+    const emailDomain = body.email.split('@')[1]?.toLowerCase();
+    if (emailDomain) {
+      const matchingPolicy = await prisma.workspacePolicy.findFirst({
+        where: {
+          permittedDomains: {
+            contains: emailDomain
+          }
+        },
+        include: {
+          workspace: true
+        }
+      });
+
+      if (matchingPolicy) {
+        const domains = matchingPolicy.permittedDomains.split(',').map(d => d.trim().toLowerCase());
+        if (domains.includes(emailDomain)) {
+          if (!matchingPolicy.allowSelfRegistration) {
+            return json({
+              error: 'registration_locked_by_policy',
+              message: 'Self-registration is disabled for your corporate domain. Please authenticate via your company Single Sign-On (SAML SSO) portal.'
+            }, 403);
+          }
+
+          const passwordHash = await bcrypt.hash(body.password, 10);
+          try {
+            let user = await prisma.user.findUnique({ where: { email: body.email } });
+            if (!user) {
+              user = await prisma.user.create({
+                data: {
+                  email: body.email,
+                  passwordHash,
+                  name: body.name
+                }
+              });
+            }
+
+            const membership = await prisma.workspaceMember.create({
+              data: {
+                workspaceId: matchingPolicy.workspaceId,
+                userId: user.id,
+                role: 'MEMBER'
+              }
+            });
+
+            const session = await issueSession(user.id, matchingPolicy.workspaceId, membership.role);
+            return json({ ...session, userId: user.id, workspaceId: matchingPolicy.workspaceId, role: membership.role, email: body.email }, 201);
+          } catch (err: any) {
+            if (err.code === 'P2002') {
+              return json({ error: 'email_already_exists' }, 400);
+            }
+            throw err;
+          }
+        }
+      }
+    }
 
     const passwordHash = await bcrypt.hash(body.password, 10);
     try {
@@ -31,7 +86,7 @@ export async function authRoutes(req: Request): Promise<Response | null> {
               user: { create: { email: body.email, passwordHash, name: body.name } }
             }
           },
-          policies: { create: { forceTimer: false, idleMinutes: 10, overtimeHours: 8 } }
+          policies: { create: { forceTimer: false, idleMinutes: 10, overtimeHours: 8, allowSelfRegistration: true } }
         },
         include: { members: { include: { user: true } } }
       });

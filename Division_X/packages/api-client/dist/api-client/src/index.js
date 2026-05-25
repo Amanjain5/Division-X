@@ -297,3 +297,34 @@ export async function getActivityMetrics(userId) {
     const suffix = q.toString() ? `?${q.toString()}` : '';
     return api(`/v1/activity/metrics${suffix}`);
 }
+// --- Enterprise Organizations ---
+export async function getOrganizations() {
+    return api('/v1/organizations/me');
+}
+export async function createOrganization(name) {
+    return api('/v1/organizations', {
+        method: 'POST',
+        body: JSON.stringify({ name })
+    });
+}
+export async function bindWorkspaceToOrg(orgId, workspaceId) {
+    return api(`/v1/organizations/${orgId}/workspaces`, {
+        method: 'POST',
+        body: JSON.stringify({ workspaceId })
+    });
+}
+export async function getOrganizationCompliance(orgId) {
+    return api(`/v1/organizations/${orgId}/compliance`);
+}
+// --- Project Team Bindings ---
+export async function bindProjectToTeam(projectId, teamId) {
+    return api(`/v1/projects/${projectId}/teams`, {
+        method: 'POST',
+        body: JSON.stringify({ teamId })
+    });
+}
+export async function unbindProjectFromTeam(projectId, teamId) {
+    return api(`/v1/projects/${projectId}/teams/${teamId}`, {
+        method: 'DELETE'
+    });
+}

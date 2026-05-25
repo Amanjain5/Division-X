@@ -358,3 +358,45 @@ export async function getActivityMetrics(userId?: string): Promise<{
   const suffix = q.toString() ? `?${q.toString()}` : '';
   return api(`/v1/activity/metrics${suffix}`);
 }
+
+// --- Enterprise Organizations ---
+export async function getOrganizations(): Promise<{ items: any[] }> {
+  return api('/v1/organizations/me');
+}
+
+export async function createOrganization(name: string): Promise<{ organization: any }> {
+  return api('/v1/organizations', {
+    method: 'POST',
+    body: JSON.stringify({ name })
+  });
+}
+
+export async function bindWorkspaceToOrg(orgId: string, workspaceId: string): Promise<{ workspace: any }> {
+  return api(`/v1/organizations/${orgId}/workspaces`, {
+    method: 'POST',
+    body: JSON.stringify({ workspaceId })
+  });
+}
+
+export async function getOrganizationCompliance(orgId: string): Promise<{
+  workspaces: Array<{ id: string; name: string; membersCount: number }>;
+  totalMembers: number;
+  totalProjects: number;
+  auditLogs: any[];
+}> {
+  return api(`/v1/organizations/${orgId}/compliance`);
+}
+
+// --- Project Team Bindings ---
+export async function bindProjectToTeam(projectId: string, teamId: string): Promise<{ projectTeam: any }> {
+  return api(`/v1/projects/${projectId}/teams`, {
+    method: 'POST',
+    body: JSON.stringify({ teamId })
+  });
+}
+
+export async function unbindProjectFromTeam(projectId: string, teamId: string): Promise<{ unbound: boolean }> {
+  return api(`/v1/projects/${projectId}/teams/${teamId}`, {
+    method: 'DELETE'
+  });
+}

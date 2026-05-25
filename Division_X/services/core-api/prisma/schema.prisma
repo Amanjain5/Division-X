@@ -27,6 +27,7 @@ model User {
   tasks             Task[]
   attendance        AttendanceLog[]
   entries           TimeEntry[]
+  orgMemberships    OrganizationMember[]
 }
 
 model Session {
@@ -43,24 +44,26 @@ model Session {
 }
 
 model Workspace {
-  id           String            @id @default(cuid())
-  name         String
-  timezone     String            @default("UTC")
-  customDomain String?           @unique
-  createdAt    DateTime          @default(now())
-  members      WorkspaceMember[]
-  teams        Team[]
-  projects     Project[]
-  tasks        Task[]
-  tags         Tag[]
-  clients      Client[]
-  entries      TimeEntry[]
-  timers       RunningTimer[]
-  breaks       BreakSession[]
-  policies     WorkspacePolicy[]
-  invites      Invite[]
-  audits       AuditLog[]
-  attendance   AttendanceLog[]
+  id             String            @id @default(cuid())
+  name           String
+  timezone       String            @default("UTC")
+  customDomain   String?           @unique
+  createdAt      DateTime          @default(now())
+  organizationId String?
+  organization   Organization?     @relation(fields: [organizationId], references: [id])
+  members        WorkspaceMember[]
+  teams          Team[]
+  projects       Project[]
+  tasks          Task[]
+  tags           Tag[]
+  clients        Client[]
+  entries        TimeEntry[]
+  timers         RunningTimer[]
+  breaks         BreakSession[]
+  policies       WorkspacePolicy[]
+  invites        Invite[]
+  audits         AuditLog[]
+  attendance     AttendanceLog[]
 }
 
 model WorkspaceMember {
@@ -87,14 +90,14 @@ model Invite {
 
   @@index([workspaceId, email])
 }
-
 model Team {
-  id          String       @id @default(cuid())
-  workspaceId String
-  name        String
-  createdAt   DateTime     @default(now())
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
-  members     TeamMember[]
+  id           String        @id @default(cuid())
+  workspaceId  String
+  name         String
+  createdAt    DateTime      @default(now())
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id])
+  members      TeamMember[]
+  projectTeams ProjectTeam[]
 
   @@index([workspaceId])
 }
@@ -110,16 +113,17 @@ model TeamMember {
 }
 
 model Project {
-  id          String      @id @default(cuid())
-  workspaceId String
-  clientId    String?
-  name        String
-  color       String      @default("#059669")
-  archived    Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
-  client      Client?     @relation(fields: [clientId], references: [id])
-  entries     TimeEntry[]
+  id           String        @id @default(cuid())
+  workspaceId  String
+  clientId     String?
+  name         String
+  color        String        @default("#059669")
+  archived     Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id])
+  client       Client?       @relation(fields: [clientId], references: [id])
+  entries      TimeEntry[]
+  projectTeams ProjectTeam[]
 
   @@index([workspaceId])
   @@index([clientId])
@@ -212,20 +216,21 @@ model BreakSession {
 
   @@index([workspaceId, userId, startedAt])
 }
-
 model WorkspacePolicy {
-  id                 String    @id @default(cuid())
-  workspaceId        String    @unique
-  forceTimer         Boolean   @default(false)
-  idleMinutes        Int       @default(10)
-  overtimeHours      Int       @default(8)
-  pomodoroMinutes    Int       @default(25)
-  breakMinutes       Int       @default(5)
-  longRunningMinutes Int       @default(480)
-  reminderEnabled    Boolean   @default(true)
-  autoPauseOnIdle    Boolean   @default(false)
-  weekStartDay       Int       @default(1)
-  workspace          Workspace @relation(fields: [workspaceId], references: [id])
+  id                    String    @id @default(cuid())
+  workspaceId           String    @unique
+  forceTimer            Boolean   @default(false)
+  idleMinutes           Int       @default(10)
+  overtimeHours         Int       @default(8)
+  pomodoroMinutes       Int       @default(25)
+  breakMinutes          Int       @default(5)
+  longRunningMinutes    Int       @default(480)
+  reminderEnabled       Boolean   @default(true)
+  autoPauseOnIdle       Boolean   @default(false)
+  allowSelfRegistration Boolean   @default(true)
+  permittedDomains      String    @default("")
+  weekStartDay          Int       @default(1)
+  workspace             Workspace @relation(fields: [workspaceId], references: [id])
 }
 
 model AuditLog {
@@ -254,3 +259,37 @@ model AttendanceLog {
 
   @@unique([workspaceId, userId, date])
 }
+
+model Organization {
+  id          String            @id @default(cuid())
+  name        String
+  billingPlan String            @default("ENTERPRISE")
+  createdAt   DateTime          @default(now())
+  workspaces  Workspace[]
+  orgMembers  OrganizationMember[]
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  orgId          String
+  userId         String
+  role           String       @default("ORG_ADMIN")
+  organization   Organization @relation(fields: [orgId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@unique([orgId, userId])
+}
+
+model ProjectTeam {
+  id        String  @id @default(cuid())
+  projectId String
+  teamId    String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, teamId])
+  @@index([projectId])
+  @@index([teamId])
+}
+
+

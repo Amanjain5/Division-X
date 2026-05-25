@@ -21,6 +21,7 @@ import { reportingRoutes } from './modules/reporting/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { attendanceRoutes } from './modules/attendance/routes.js';
 import { activityRoutes } from './modules/activity/routes.js';
+import { organizationRoutes } from './modules/organization/routes.js';
 
 const app = Fastify({ logger: true });
 
@@ -250,7 +251,8 @@ const routePrefixes: Record<string, any> = {
   '/v1/reports': reportingRoutes,
   '/v1/audit': auditRoutes,
   '/v1/attendance': attendanceRoutes,
-  '/v1/activity': activityRoutes
+  '/v1/activity': activityRoutes,
+  '/v1/organizations': organizationRoutes
 };
 
 // Public health endpoint registered directly on Fastify

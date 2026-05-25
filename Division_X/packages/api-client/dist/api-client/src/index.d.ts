@@ -309,5 +309,30 @@ export declare function getActivityMetrics(userId?: string): Promise<{
         breakNudgeMessage: string;
     };
 }>;
+export declare function getOrganizations(): Promise<{
+    items: any[];
+}>;
+export declare function createOrganization(name: string): Promise<{
+    organization: any;
+}>;
+export declare function bindWorkspaceToOrg(orgId: string, workspaceId: string): Promise<{
+    workspace: any;
+}>;
+export declare function getOrganizationCompliance(orgId: string): Promise<{
+    workspaces: Array<{
+        id: string;
+        name: string;
+        membersCount: number;
+    }>;
+    totalMembers: number;
+    totalProjects: number;
+    auditLogs: any[];
+}>;
+export declare function bindProjectToTeam(projectId: string, teamId: string): Promise<{
+    projectTeam: any;
+}>;
+export declare function unbindProjectFromTeam(projectId: string, teamId: string): Promise<{
+    unbound: boolean;
+}>;
 export {};
 //# sourceMappingURL=index.d.ts.map

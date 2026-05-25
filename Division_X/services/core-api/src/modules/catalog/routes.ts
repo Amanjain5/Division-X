@@ -7,12 +7,76 @@ import { sendGlobalNotification } from '../../core/notifications.js';
 export async function catalogRoutes(req: Request, ctx: RequestContext): Promise<Response | null> {
   const url = new URL(req.url);
   const canManage = hasRole(ctx.role, ['OWNER', 'ADMIN', 'MANAGER']);
-
   // --- Projects ---
   if (req.method === 'GET' && url.pathname === '/v1/projects') {
-    const items = await prisma.project.findMany({ where: { workspaceId: ctx.workspaceId }, include: { client: true }, orderBy: { name: 'asc' } });
+    let items;
+    if (hasRole(ctx.role, ['OWNER', 'ADMIN', 'MANAGER'])) {
+      items = await prisma.project.findMany({
+        where: { workspaceId: ctx.workspaceId },
+        include: { client: true, projectTeams: true },
+        orderBy: { name: 'asc' }
+      });
+    } else {
+      const userTeams = await prisma.teamMember.findMany({
+        where: { userId: ctx.userId },
+        select: { teamId: true }
+      });
+      const teamIds = userTeams.map(ut => ut.teamId);
+      items = await prisma.project.findMany({
+        where: {
+          workspaceId: ctx.workspaceId,
+          OR: [
+            { projectTeams: { none: {} } },
+            { projectTeams: { some: { teamId: { in: teamIds } } } }
+          ]
+        },
+        include: { client: true, projectTeams: true },
+        orderBy: { name: 'asc' }
+      });
+    }
     return json({ items });
   }
+
+  if (req.method === 'POST' && url.pathname.startsWith('/v1/projects/') && url.pathname.endsWith('/teams')) {
+    if (!canManage) return json({ error: 'forbidden' }, 403);
+    const pathParts = url.pathname.split('/');
+    const projectId = pathParts[pathParts.length - 2];
+    const body = (await readJson(req)) as { teamId?: string };
+    if (!body.teamId) return json({ error: 'invalid_payload' }, 400);
+
+    const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId: ctx.workspaceId } });
+    const team = await prisma.team.findFirst({ where: { id: body.teamId, workspaceId: ctx.workspaceId } });
+    if (!project || !team) return json({ error: 'not_found' }, 404);
+
+    const projectTeam = await prisma.projectTeam.upsert({
+      where: {
+        projectId_teamId: { projectId, teamId: body.teamId }
+      },
+      create: { projectId, teamId: body.teamId },
+      update: {}
+    });
+
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'project.bind_team', targetType: 'project', targetId: projectId, metadata: { teamId: body.teamId } });
+    return json({ projectTeam }, 201);
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/v1/projects/') && url.pathname.includes('/teams/')) {
+    if (!canManage) return json({ error: 'forbidden' }, 403);
+    const pathParts = url.pathname.split('/');
+    const teamId = pathParts.pop()!;
+    const projectId = pathParts[pathParts.length - 2];
+
+    const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId: ctx.workspaceId } });
+    if (!project) return json({ error: 'not_found' }, 404);
+
+    await prisma.projectTeam.deleteMany({
+      where: { projectId, teamId }
+    });
+
+    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'project.unbind_team', targetType: 'project', targetId: projectId, metadata: { teamId } });
+    return json({ unbound: true });
+  }
+
   if (req.method === 'POST' && url.pathname === '/v1/projects') {
     if (!canManage) return json({ error: 'forbidden' }, 403);
     const b = (await readJson(req)) as { name?: string; color?: string; clientId?: string };

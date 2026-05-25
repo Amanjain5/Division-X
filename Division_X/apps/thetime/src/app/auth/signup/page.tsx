@@ -18,7 +18,6 @@ export default function SignupPage() {
     router.replace('/tracker');
     return null;
   }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -29,13 +28,16 @@ export default function SignupPage() {
       const result = await signup({ workspaceName, email, password, name: name || undefined });
       persistAuth(result);
       router.push('/tracker');
-    } catch {
-      setError('Unable to create account. Email may already be in use.');
+    } catch (err: any) {
+      if (err.message && err.message.includes('403')) {
+        setError('Self-registration is disabled for your corporate domain. Please authenticate via your company Single Sign-On (SAML SSO) portal.');
+      } else {
+        setError('Unable to create account. Email may already be in use.');
+      }
     } finally {
       setLoading(false);
     }
   }
-
   return (
     <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(165deg, #011a13 0%, #052e21 40%, #0a4030 100%)' }}>
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: '48px 36px' }}>
