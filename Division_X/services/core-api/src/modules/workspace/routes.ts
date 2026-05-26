@@ -127,23 +127,46 @@ export async function workspaceRoutes(req: Request, ctx: RequestContext): Promis
 
     const token = crypto.randomBytes(20).toString('hex');
     const invite = await prisma.invite.create({
-      data: { workspaceId: ctx.workspaceId, email: body.email, role: body.role || 'MEMBER', token, expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) }
+      data: {
+        workspaceId: ctx.workspaceId,
+        email: body.email,
+        role: body.role || 'MEMBER',
+        token,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7)
+      }
     });
 
-    // Resolve workspace name and dispatch invitation email asynchronously
     const workspace = await prisma.workspace.findUnique({
       where: { id: ctx.workspaceId },
       select: { name: true }
     });
     const workspaceName = workspace?.name || 'Your Workspace';
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    
+    const requestOrigin = req.headers.get('origin');
+    const requestReferer = req.headers.get('referer');
+    let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    if (requestOrigin) {
+      frontendUrl = requestOrigin;
+    } else if (requestReferer) {
+      try {
+        frontendUrl = new URL(requestReferer).origin;
+      } catch {}
+    }
+    
     const inviteLink = `${frontendUrl}/auth/accept-invite?token=${token}`;
 
     sendInviteEmail(body.email, workspaceName, inviteLink).catch((err) => {
       console.error('❌ Failed to dispatch invitation email:', err);
     });
 
-    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'invite.create', targetType: 'invite', targetId: invite.id, metadata: { email: body.email, role: body.role } });
+    await writeAudit({
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      action: 'invite.create',
+      targetType: 'invite',
+      targetId: invite.id,
+      metadata: { email: body.email, role: body.role }
+    });
     return json({ inviteId: invite.id, token: invite.token, workspaceId: ctx.workspaceId, email: invite.email, role: invite.role }, 201);
   }
 

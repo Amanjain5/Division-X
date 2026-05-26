@@ -180,7 +180,16 @@ export async function authRoutes(req: Request): Promise<Response | null> {
       data: { resetToken: token, resetTokenExpires: expires }
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const requestOrigin = req.headers.get('origin');
+    const requestReferer = req.headers.get('referer');
+    let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    if (requestOrigin) {
+      frontendUrl = requestOrigin;
+    } else if (requestReferer) {
+      try {
+        frontendUrl = new URL(requestReferer).origin;
+      } catch {}
+    }
     const resetLink = `${frontendUrl}/auth/reset-password?token=${token}`;
 
     sendPasswordResetEmail(user.email, user.name || '', resetLink).catch((err) => {

@@ -1,13 +1,14 @@
 {
+  "/timesheet/page": "app/timesheet/page.js",
   "/tracker/page": "app/tracker/page.js",
-  "/workspace/teams/page": "app/workspace/teams/page.js",
-  "/workspace/projects/page": "app/workspace/projects/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/reports/page": "app/reports/page.js",
   "/workspace/settings/page": "app/workspace/settings/page.js",
   "/workspace/audit/page": "app/workspace/audit/page.js",
+  "/workspace/activity/page": "app/workspace/activity/page.js",
   "/workspace/tags/page": "app/workspace/tags/page.js",
   "/workspace/clients/page": "app/workspace/clients/page.js",
   "/workspace/approvals/page": "app/workspace/approvals/page.js",
-  "/workspace/activity/page": "app/workspace/activity/page.js",
-  "/timesheet/page": "app/timesheet/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/workspace/projects/page": "app/workspace/projects/page.js",
+  "/workspace/teams/page": "app/workspace/teams/page.js"
 }
