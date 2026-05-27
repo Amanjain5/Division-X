@@ -5,8 +5,10 @@ import { AppShell } from '../../components/app-shell';
 import { Toast } from '../../components/toast';
 import { getReport, getReportExportUrl, getCurrentRole } from '@divisionx/api-client';
 import { PaginationBar } from '../../components/pagination-bar';
+import { SkeletonReports } from '../../components/skeleton';
 
 export default function ReportsPage() {
+  const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalHours: 0, billableHours: 0, itemsCount: 0, approvedCount: 0 });
   const [grouped, setGrouped] = useState<any[] | null>(null);
@@ -33,12 +35,24 @@ export default function ReportsPage() {
       setStats({ totalHours: d.totalHours, billableHours: d.billableHours || 0, itemsCount: d.itemsCount, approvedCount: d.approvedCount || 0 });
       setGrouped(d.grouped || null);
       setTotal(d.pagination?.total || 0);
-    } catch { setToast({ text: 'Failed to load', type: 'error' }); }
+    } catch { 
+      setToast({ text: 'Failed to load', type: 'error' }); 
+    } finally {
+      setLoading(false);
+    }
   }, [page, from, to, billable, approved, groupBy]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   const maxGroupHours = grouped ? Math.max(...grouped.map((g: any) => g.hours), 1) : 1;
+
+  if (loading) {
+    return (
+      <AppShell title="Reports">
+        <SkeletonReports />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Reports">

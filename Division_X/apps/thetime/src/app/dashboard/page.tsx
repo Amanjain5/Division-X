@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { AppShell } from '../../components/app-shell';
 import { getReport, getTimeEntries, getCurrentRole, getActivityReport, clockInAttendance, getWorkspaceBootstrap } from '@divisionx/api-client';
 import { requestNotificationPermission, notifyCritical } from '../../components/notification-manager';
+import { SkeletonDashboard } from '../../components/skeleton';
 
 function formatDuration(ms: number): string {
   const h = Math.floor(ms / 3600000);
@@ -12,6 +13,7 @@ function formatDuration(ms: number): string {
 }
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalHours: 0, billableHours: 0, itemsCount: 0, approvedCount: 0 });
   const [policy, setPolicy] = useState<any>(null);
   const [running, setRunning] = useState<any>(null);
@@ -57,7 +59,9 @@ export default function DashboardPage() {
       if (isManager) {
         try { const act = await getActivityReport(); setTeamActivity(act); } catch { /* ok */ }
       }
-    } catch { /* ok */ }
+    } catch { /* ok */ } finally {
+      setLoading(false);
+    }
   }, [isManager]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -116,6 +120,14 @@ export default function DashboardPage() {
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const maxHours = Math.max(...weeklyData, 1);
+
+  if (loading) {
+    return (
+      <AppShell title="Dashboard">
+        <SkeletonDashboard />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Dashboard">

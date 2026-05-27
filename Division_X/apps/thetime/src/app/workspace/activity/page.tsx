@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AppShell } from '../../../components/app-shell';
+import { SkeletonList } from '../../../components/skeleton';
 import { 
   getWorkspaceBootstrap, 
   getActivityTimeline, 
@@ -355,7 +356,9 @@ export default function ActivityMonitoringPage() {
               </div>
 
               {loading ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Bootstrapping team monitors...</div>
+                <div style={{ padding: '20px 0' }}>
+                  <SkeletonList rows={2} cols={3} />
+                </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                   {hudStates.map((hud) => {
@@ -521,8 +524,8 @@ export default function ActivityMonitoringPage() {
               </div>
 
               {loadingTimeline ? (
-                <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Compiling chronological barcode matrix...
+                <div style={{ padding: '20px 0' }}>
+                  <SkeletonList rows={2} cols={1} />
                 </div>
               ) : timelineData && timelineData.timeline && timelineData.timeline.length > 0 ? (
                 <DailyBarcode timeline={timelineData.timeline} dateString={selectedDate} />

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { AppShell } from '../../components/app-shell';
 import { Toast } from '../../components/toast';
+import { SkeletonTracker } from '../../components/skeleton';
 import {
   getTimeEntries, startTimer, stopTimer,
   getRunningTimer, getCatalog, createCatalog, updateCatalog, getCurrentRole, startBreak, stopBreak,
@@ -83,6 +84,7 @@ function ActiveTimerBanner({
 }
 
 export default function TrackerPage() {
+  const [loading, setLoading] = useState(true);
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState('');
   const [billable, setBillable] = useState(false);
@@ -163,6 +165,8 @@ export default function TrackerPage() {
       }
     } catch {
       setToast({ text: 'Failed to load data', type: 'error' });
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -425,6 +429,14 @@ export default function TrackerPage() {
         startTimer({ description: description || '🍅 Pomodoro Focus', projectId: projectId || undefined, billable }).then(refresh).catch(() => {});
       }
     }
+  }
+
+  if (loading) {
+    return (
+      <AppShell title="Time Tracker">
+        <SkeletonTracker />
+      </AppShell>
+    );
   }
 
   return (

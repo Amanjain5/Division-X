@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { AppShell } from '../../components/app-shell';
 import { Toast } from '../../components/toast';
+import { SkeletonTimesheet } from '../../components/skeleton';
 import { getTimeEntries, getWorkspace, getCatalog } from '@divisionx/api-client';
 import {
   SidebarTabs,
@@ -67,6 +68,7 @@ function getWeekGrid(anchor: Date): Date[] {
 }
 
 export default function TimesheetPage() {
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabMode>('calendar');
   const [view, setView] = useState<ViewMode>('week');
   const [anchorDate, setAnchorDate] = useState<Date>(() => {
@@ -131,6 +133,8 @@ export default function TimesheetPage() {
       setItems(entriesData.items);
     } catch {
       setToast({ text: 'Failed to load timeline data', type: 'error' });
+    } finally {
+      setLoading(false);
     }
   }, [queryBounds]);
 
@@ -165,6 +169,14 @@ export default function TimesheetPage() {
       date: day.getDate(),
     }));
   }, [gridDays]);
+
+  if (loading) {
+    return (
+      <AppShell title="Timesheet">
+        <SkeletonTimesheet />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Timesheet">
