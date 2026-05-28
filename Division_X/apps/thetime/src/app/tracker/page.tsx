@@ -10,6 +10,7 @@ import {
   startPomodoro, getTimerAlerts, getPolicies, reportIdle
 } from '@divisionx/api-client';
 import { requestNotificationPermission, notifyCritical } from '../../components/notification-manager';
+import { useActivityTracker } from '../../hooks/use-activity-tracker';
 
 function formatDuration(ms: number): string {
   const h = Math.floor(ms / 3600000);
@@ -83,6 +84,125 @@ function ActiveTimerBanner({
   );
 }
 
+interface LiveForensicsHUDProps {
+  metrics: {
+    keystrokes: number;
+    mouseMovement: number;
+    clicks: number;
+    activeScore: number;
+  };
+  isActive: boolean;
+}
+
+function LiveForensicsHUD({ metrics, isActive }: LiveForensicsHUDProps) {
+  if (!isActive) return null;
+
+  return (
+    <div className="card card-dark mb-6" style={{
+      background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+      border: '1px solid rgba(255,255,255,0.05)',
+      padding: '16px 20px',
+      borderRadius: '16px',
+      boxShadow: '0 4px 30px rgba(0,0,0,0.35)',
+      backdropFilter: 'blur(8px)'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="live-dot" style={liveDotStyle}></span> ⚡ Live Input Productivity Forensics HUD
+        </h4>
+        <span style={{
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          background: metrics.activeScore >= 70 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+          color: metrics.activeScore >= 70 ? '#34D399' : '#FBBF24',
+          border: metrics.activeScore >= 70 ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(245, 158, 11, 0.2)',
+          padding: '2px 8px',
+          borderRadius: '6px',
+          letterSpacing: '0.5px'
+        }}>
+          ACTIVE RATIO: {metrics.activeScore}%
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '14px' }}>
+        
+        {/* Keyboard Velocity */}
+        <div style={hudMetricBlockStyle}>
+          <div style={{ fontSize: '1.25rem' }}>⌨️</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={hudLabelStyle}>Keystrokes</span>
+            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+              {metrics.keystrokes}
+            </span>
+          </div>
+        </div>
+
+        {/* Mouse Vector Travel */}
+        <div style={hudMetricBlockStyle}>
+          <div style={{ fontSize: '1.25rem' }}>🖱️</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={hudLabelStyle}>Pointer Travel</span>
+            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+              {metrics.mouseMovement.toLocaleString()} px
+            </span>
+          </div>
+        </div>
+
+        {/* Click Density */}
+        <div style={hudMetricBlockStyle}>
+          <div style={{ fontSize: '1.25rem' }}>🖲️</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={hudLabelStyle}>Click Counts</span>
+            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+              {metrics.clicks} clicks
+            </span>
+          </div>
+        </div>
+
+        {/* Active Ratio Ring Tracker */}
+        <div style={hudMetricBlockStyle}>
+          <div style={{ fontSize: '1.25rem' }}>⚡</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={hudLabelStyle}>State Tracker</span>
+            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: metrics.activeScore >= 70 ? '#34D399' : '#FBBF24', fontFamily: 'monospace' }}>
+              {metrics.activeScore >= 70 ? '🟢 OPTIMAL' : '🟡 LOW INPUT'}
+            </span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+const liveDotStyle: React.CSSProperties = {
+  width: '6px',
+  height: '6px',
+  borderRadius: '50%',
+  background: '#EF4444',
+  display: 'inline-block',
+  boxShadow: '0 0 8px #EF4444',
+  animation: 'pulse-active 2s infinite'
+};
+
+const hudMetricBlockStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.02)',
+  border: '1px solid rgba(255,255,255,0.04)',
+  borderRadius: '10px',
+  padding: '10px 14px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px'
+};
+
+const hudLabelStyle: React.CSSProperties = {
+  fontSize: '0.7rem',
+  color: 'rgba(255,255,255,0.4)',
+  textTransform: 'uppercase',
+  fontWeight: 600,
+  letterSpacing: '0.5px'
+};
+
 export default function TrackerPage() {
   const [loading, setLoading] = useState(true);
   const [description, setDescription] = useState('');
@@ -122,6 +242,28 @@ export default function TrackerPage() {
   const [longRunAlert, setLongRunAlert] = useState(false);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [idleMinutes, setIdleMinutes] = useState(10);
+
+  // Hook to track active user browser pointer/typing activity metrics in real-time
+  const activityMetrics = useActivityTracker(
+    !!running && !onBreak,
+    idleMinutes,
+    () => {
+      // onAutoPaused callback (timer auto-paused by backend policy)
+      setRunning(null);
+      setOnBreak(false);
+      setToast({ text: 'Timer auto-paused due to inactivity break.', type: 'error' });
+      refresh();
+    },
+    () => {
+      // onIdleDetected callback (when autoPauseOnIdle is disabled)
+      setIdleAlert(true);
+      notifyCritical(
+        'TheTime — Idle Detected',
+        `You've been inactive for ${idleMinutes} minutes while the timer is running.`,
+        'idle'
+      );
+    }
+  );
 
   // Load project and task catalogs once on mount
   useEffect(() => {
@@ -223,27 +365,13 @@ export default function TrackerPage() {
     }
   }, [onBreak, running]);
 
-  // Idle detection: reset on any user activity, fire after idleMinutes of inactivity while timer is running
+  // In-browser inputs activity density and SOC 2 forensics is now managed by the useActivityTracker hook above.
   useEffect(() => {
-    function resetIdle() {
-      setIdleAlert(false);
-      if (idleRef.current) clearTimeout(idleRef.current);
-      if (running) {
-        idleRef.current = setTimeout(() => {
-          setIdleAlert(true);
-          notifyCritical('TheTime — Idle Detected', `You've been inactive for ${idleMinutes} minutes while the timer is running.`, 'idle');
-          reportIdle().catch(() => {});
-        }, idleMinutes * 60 * 1000);
-      }
-    }
-    const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'];
-    events.forEach(e => window.addEventListener(e, resetIdle));
-    resetIdle();
+    // Basic fallback cleanup for backward compatibility
     return () => {
-      events.forEach(e => window.removeEventListener(e, resetIdle));
       if (idleRef.current) clearTimeout(idleRef.current);
     };
-  }, [running, idleMinutes]);
+  }, []);
 
   // Long running timer check
   useEffect(() => {
@@ -520,7 +648,6 @@ export default function TrackerPage() {
         </div>
       </div>
 
-      {/* Ticking live clock isolated cleanly inside leaf element to avoid O(N*M) page refreshes */}
       <ActiveTimerBanner
         running={running}
         onBreak={onBreak}
@@ -528,6 +655,11 @@ export default function TrackerPage() {
         totalBreakMs={totalBreakMsRef.current}
         toggleBreak={toggleBreak}
         onStop={onStop}
+      />
+
+      <LiveForensicsHUD
+        metrics={activityMetrics}
+        isActive={!!running && !onBreak}
       />
 
       {/* Kanban Board */}

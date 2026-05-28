@@ -9,7 +9,7 @@ export async function policyRoutes(req: Request, ctx: RequestContext): Promise<R
 
   if (req.method === 'GET' && url.pathname === '/v1/policies') {
     const policy = await prisma.workspacePolicy.findFirst({ where: { workspaceId: ctx.workspaceId } });
-    return json(policy || { forceTimer: false, idleMinutes: 10, overtimeHours: 8, pomodoroMinutes: 25, breakMinutes: 5, longRunningMinutes: 480, reminderEnabled: true, autoPauseOnIdle: false, weekStartDay: 1 });
+    return json(policy || { forceTimer: false, idleMinutes: 10, overtimeHours: 8, pomodoroMinutes: 25, breakMinutes: 5, longRunningMinutes: 480, reminderEnabled: true, autoPauseOnIdle: false, weekStartDay: 1, fiscalYearStartMonth: 1 });
   }
 
   if (req.method === 'PATCH' && url.pathname === '/v1/policies') {
@@ -18,6 +18,7 @@ export async function policyRoutes(req: Request, ctx: RequestContext): Promise<R
       forceTimer?: boolean; idleMinutes?: number; overtimeHours?: number;
       pomodoroMinutes?: number; breakMinutes?: number; longRunningMinutes?: number;
       reminderEnabled?: boolean; autoPauseOnIdle?: boolean; weekStartDay?: number;
+      fiscalYearStartMonth?: number;
     };
     const existing = await prisma.workspacePolicy.findFirst({ where: { workspaceId: ctx.workspaceId } });
     if (!existing) {
@@ -32,7 +33,8 @@ export async function policyRoutes(req: Request, ctx: RequestContext): Promise<R
           longRunningMinutes: body.longRunningMinutes ?? 480,
           reminderEnabled: body.reminderEnabled ?? true,
           autoPauseOnIdle: body.autoPauseOnIdle ?? false,
-          weekStartDay: body.weekStartDay ?? 1
+          weekStartDay: body.weekStartDay ?? 1,
+          fiscalYearStartMonth: body.fiscalYearStartMonth ?? 1
         }
       });
       await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'policy.create', targetType: 'workspace_policy', targetId: created.id, metadata: body });

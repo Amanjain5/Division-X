@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AppShell } from '../../components/app-shell';
 import { Toast } from '../../components/toast';
-import { getReport, getReportExportUrl, getCurrentRole } from '@divisionx/api-client';
+import { getReport, getReportExportUrl, getCurrentRole, getPolicies } from '@divisionx/api-client';
 import { PaginationBar } from '../../components/pagination-bar';
 import { SkeletonReports } from '../../components/skeleton';
 
@@ -21,6 +21,106 @@ export default function ReportsPage() {
   const [groupBy, setGroupBy] = useState<string>('');
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const role = typeof window !== 'undefined' ? getCurrentRole() : 'MEMBER';
+  
+  // Fiscal Year Settings
+  const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState(1);
+  const [preset, setPreset] = useState('');
+
+  // Fetch policies on mount to load fiscal start month
+  const [policies, setPolicies] = useState<any>(null);
+  useEffect(() => {
+    getPolicies().then((p: any) => {
+      setPolicies(p);
+      if (p && p.fiscalYearStartMonth) {
+        setFiscalYearStartMonth(p.fiscalYearStartMonth);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Fiscal dates utility calculation
+  function calculateFiscalDates(presetVal: string, startMonth: number) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthZeroIndexed = now.getMonth(); // 0 - 11
+    const startMonthZeroIndexed = startMonth - 1; // 0 - 11
+    
+    let fiscalYearStartYear = currentYear;
+    if (currentMonthZeroIndexed < startMonthZeroIndexed) {
+      fiscalYearStartYear = currentYear - 1;
+    }
+    
+    const currentFiscalYearStart = new Date(fiscalYearStartYear, startMonthZeroIndexed, 1);
+    const currentFiscalYearEnd = new Date(fiscalYearStartYear + 1, startMonthZeroIndexed, 0);
+
+    if (presetVal === 'this-fiscal-year') {
+      return {
+        from: currentFiscalYearStart.toISOString().split('T')[0],
+        to: currentFiscalYearEnd.toISOString().split('T')[0]
+      };
+    }
+    
+    if (presetVal === 'previous-fiscal-year') {
+      const prevFiscalYearStart = new Date(fiscalYearStartYear - 1, startMonthZeroIndexed, 1);
+      const prevFiscalYearEnd = new Date(fiscalYearStartYear, startMonthZeroIndexed, 0);
+      return {
+        from: prevFiscalYearStart.toISOString().split('T')[0],
+        to: prevFiscalYearEnd.toISOString().split('T')[0]
+      };
+    }
+    
+    if (presetVal === 'this-fiscal-quarter') {
+      const monthsSinceStart = (currentMonthZeroIndexed - startMonthZeroIndexed + 12) % 12;
+      const currentQuarter = Math.floor(monthsSinceStart / 3); // 0, 1, 2, or 3
+      
+      const quarterStartMonth = (startMonthZeroIndexed + currentQuarter * 3) % 12;
+      let quarterStartYear = fiscalYearStartYear;
+      if (startMonthZeroIndexed + currentQuarter * 3 >= 12) {
+        quarterStartYear = fiscalYearStartYear + 1;
+      }
+      
+      const quarterStart = new Date(quarterStartYear, quarterStartMonth, 1);
+      const quarterEnd = new Date(quarterStartYear, quarterStartMonth + 3, 0);
+      return {
+        from: quarterStart.toISOString().split('T')[0],
+        to: quarterEnd.toISOString().split('T')[0]
+      };
+    }
+    
+    if (presetVal === 'previous-fiscal-quarter') {
+      const monthsSinceStart = (currentMonthZeroIndexed - startMonthZeroIndexed + 12) % 12;
+      const currentQuarter = Math.floor(monthsSinceStart / 3); // 0, 1, 2, or 3
+      
+      const prevQuarter = (currentQuarter - 1 + 4) % 4;
+      let quarterStartYear = fiscalYearStartYear;
+      if (currentQuarter === 0) {
+        quarterStartYear = fiscalYearStartYear - 1;
+      }
+      
+      const quarterStartMonth = (startMonthZeroIndexed + prevQuarter * 3) % 12;
+      if (prevQuarter === 3 && startMonthZeroIndexed + 9 >= 12 && currentQuarter !== 0) {
+        quarterStartYear = fiscalYearStartYear;
+      }
+      
+      const quarterStart = new Date(quarterStartYear, quarterStartMonth, 1);
+      const quarterEnd = new Date(quarterStartYear, quarterStartMonth + 3, 0);
+      return {
+        from: quarterStart.toISOString().split('T')[0],
+        to: quarterEnd.toISOString().split('T')[0]
+      };
+    }
+    
+    return { from: '', to: '' };
+  }
+
+  const handlePresetChange = (presetVal: string) => {
+    setPreset(presetVal);
+    if (presetVal === '') {
+      return;
+    }
+    const dates = calculateFiscalDates(presetVal, fiscalYearStartMonth);
+    setFrom(dates.from);
+    setTo(dates.to);
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -66,8 +166,18 @@ export default function ReportsPage() {
 
       {/* Filters */}
       <div className="card mb-6" style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <div className="input-group"><label className="label">From</label><input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div className="input-group"><label className="label">To</label><input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <div className="input-group">
+          <label className="label">Date Preset</label>
+          <select className="select" value={preset} onChange={(e) => handlePresetChange(e.target.value)}>
+            <option value="">Custom Dates</option>
+            <option value="this-fiscal-year">This Fiscal Year</option>
+            <option value="previous-fiscal-year">Previous Fiscal Year</option>
+            <option value="this-fiscal-quarter">This Fiscal Quarter</option>
+            <option value="previous-fiscal-quarter">Previous Fiscal Quarter</option>
+          </select>
+        </div>
+        <div className="input-group"><label className="label">From</label><input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} disabled={preset !== ''} /></div>
+        <div className="input-group"><label className="label">To</label><input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} disabled={preset !== ''} /></div>
         <div className="input-group"><label className="label">Billable</label>
           <select className="select" value={billable} onChange={(e) => setBillable(e.target.value)}><option value="">All</option><option value="true">Billable</option><option value="false">Non-billable</option></select>
         </div>

@@ -264,6 +264,12 @@ export async function getAudit(params) {
     const q = new URLSearchParams();
     if (params?.page)
         q.set('page', String(params.page));
+    if (params?.userId)
+        q.set('userId', params.userId);
+    if (params?.action)
+        q.set('action', params.action);
+    if (params?.targetType)
+        q.set('targetType', params.targetType);
     const suffix = q.toString() ? `?${q.toString()}` : '';
     return api(`/v1/audit${suffix}`);
 }
@@ -277,8 +283,11 @@ export async function clockOutAttendance() {
 export async function getTodayAttendance() {
     return api('/v1/attendance/today');
 }
-export async function reportIdle() {
-    return api('/v1/time/idle', { method: 'POST' });
+export async function reportIdle(payload) {
+    return api('/v1/time/idle', {
+        method: 'POST',
+        body: payload ? JSON.stringify(payload) : undefined
+    });
 }
 // --- Activity Monitoring ---
 export async function getActivityTimeline(userId, date) {

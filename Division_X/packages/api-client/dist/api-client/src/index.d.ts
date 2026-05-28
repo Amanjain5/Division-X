@@ -266,6 +266,9 @@ export declare function getPolicies(): Promise<any>;
 export declare function updatePolicies(payload: any): Promise<any>;
 export declare function getAudit(params?: {
     page?: number;
+    userId?: string;
+    action?: string;
+    targetType?: string;
 }): Promise<{
     items: any[];
 }>;
@@ -278,7 +281,11 @@ export declare function clockOutAttendance(): Promise<{
 export declare function getTodayAttendance(): Promise<{
     attendance: any | null;
 }>;
-export declare function reportIdle(): Promise<{
+export declare function reportIdle(payload?: {
+    keystrokes?: number;
+    mouseMovement?: number;
+    clicks?: number;
+}): Promise<{
     success: boolean;
 }>;
 export declare function getActivityTimeline(userId?: string, date?: string): Promise<{

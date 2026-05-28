@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentRole, clearAuth, switchWorkspace } from '@divisionx/api-client';
@@ -31,7 +31,6 @@ export function AppShell({ title, children }: { title: string; children: React.R
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
   const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     setPendingHref(null);
@@ -153,11 +152,9 @@ export function AppShell({ title, children }: { title: string; children: React.R
 
   function handleNavigate(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
     if (href === pathname) return;
-    e.preventDefault();
+    // Don't trigger loading pending state on modifier clicks (Ctrl, Cmd, Shift, Middle click)
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
     setPendingHref(href);
-    startTransition(() => {
-      router.push(href);
-    });
   }
 
   function prefetchRoute(href: string) {
@@ -168,7 +165,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
 
   function navClass(href: string) {
     const isActive = pathname === href;
-    const isLoading = pendingHref === href || (isPending && pendingHref === href);
+    const isLoading = pendingHref === href;
     return `nav-link ${isActive ? 'active' : ''} ${isLoading ? 'pending' : ''}`;
   }
 
@@ -192,7 +189,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
   return (
     <AuthGuard>
       <div className="app-layout">
-        {(isPending || pendingHref) && <div className="route-progress" />}
+        {pendingHref && <div className="route-progress" />}
         <aside className="sidebar">
           <div className="sidebar-header">
             <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit' }}>
@@ -261,7 +258,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
             >↪</button>
           </div>
         </aside>
-        <main className={`main-content route-content ${isPending || pendingHref ? 'route-content-pending' : ''}`}>
+        <main className={`main-content route-content ${pendingHref ? 'route-content-pending' : ''}`}>
           <div className="page-header">
             <h1 className="page-title">{title}</h1>
           </div>

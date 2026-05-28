@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [longRunningMinutes, setLongRunningMinutes] = useState(480);
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [weekStartDay, setWeekStartDay] = useState(1);
+  const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState(1);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -25,6 +26,7 @@ export default function SettingsPage() {
       setPomodoroMinutes(p.pomodoroMinutes ?? 25); setBreakMinutes(p.breakMinutes ?? 5);
       setLongRunningMinutes(p.longRunningMinutes ?? 480); setReminderEnabled(p.reminderEnabled ?? true);
       setWeekStartDay(p.weekStartDay ?? 1);
+      setFiscalYearStartMonth(p.fiscalYearStartMonth ?? 1);
       setWorkspaceName(ws.workspaceName || ''); setTimezone(ws.timezone || 'UTC');
     }).catch(() => setToast({ text: 'Failed to load settings', type: 'error' })).finally(() => setLoading(false));
   }, []);
@@ -35,7 +37,20 @@ export default function SettingsPage() {
   }
 
   async function savePolicies() {
-    try { await updatePolicies({ forceTimer, idleMinutes, overtimeHours, pomodoroMinutes, breakMinutes, longRunningMinutes, reminderEnabled, weekStartDay }); setToast({ text: 'Policies saved', type: 'success' }); }
+    try { 
+      await updatePolicies({ 
+        forceTimer, 
+        idleMinutes, 
+        overtimeHours, 
+        pomodoroMinutes, 
+        breakMinutes, 
+        longRunningMinutes, 
+        reminderEnabled, 
+        weekStartDay,
+        fiscalYearStartMonth
+      }); 
+      setToast({ text: 'Policies saved', type: 'success' }); 
+    }
     catch { setToast({ text: 'Failed to save', type: 'error' }); }
   }
 
@@ -77,6 +92,22 @@ export default function SettingsPage() {
           <div className="input-group"><label className="label">Week Starts On</label>
             <select className="select" value={weekStartDay} onChange={(e) => setWeekStartDay(Number(e.target.value))}>
               <option value={0}>Sunday</option><option value={1}>Monday</option><option value={6}>Saturday</option>
+            </select>
+          </div>
+          <div className="input-group"><label className="label">Fiscal Year Starts In</label>
+            <select className="select" value={fiscalYearStartMonth} onChange={(e) => setFiscalYearStartMonth(Number(e.target.value))}>
+              <option value={1}>January</option>
+              <option value={2}>February</option>
+              <option value={3}>March</option>
+              <option value={4}>April</option>
+              <option value={5}>May</option>
+              <option value={6}>June</option>
+              <option value={7}>July</option>
+              <option value={8}>August</option>
+              <option value={9}>September</option>
+              <option value={10}>October</option>
+              <option value={11}>November</option>
+              <option value={12}>December</option>
             </select>
           </div>
         </div>

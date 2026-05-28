@@ -302,12 +302,16 @@ export async function updatePolicies(payload: any): Promise<any> {
 }
 
 // --- Audit ---
-export async function getAudit(params?: { page?: number }): Promise<{ items: any[] }> {
+export async function getAudit(params?: { page?: number; userId?: string; action?: string; targetType?: string }): Promise<{ items: any[] }> {
   const q = new URLSearchParams();
   if (params?.page) q.set('page', String(params.page));
+  if (params?.userId) q.set('userId', params.userId);
+  if (params?.action) q.set('action', params.action);
+  if (params?.targetType) q.set('targetType', params.targetType);
   const suffix = q.toString() ? `?${q.toString()}` : '';
   return api(`/v1/audit${suffix}`);
 }
+
 
 // --- Attendance ---
 export async function clockInAttendance(): Promise<{ attendance: any }> {
@@ -322,8 +326,11 @@ export async function getTodayAttendance(): Promise<{ attendance: any | null }> 
   return api('/v1/attendance/today');
 }
 
-export async function reportIdle(): Promise<{ success: boolean }> {
-  return api('/v1/time/idle', { method: 'POST' });
+export async function reportIdle(payload?: { keystrokes?: number; mouseMovement?: number; clicks?: number }): Promise<{ success: boolean }> {
+  return api('/v1/time/idle', {
+    method: 'POST',
+    body: payload ? JSON.stringify(payload) : undefined
+  });
 }
 
 // --- Activity Monitoring ---

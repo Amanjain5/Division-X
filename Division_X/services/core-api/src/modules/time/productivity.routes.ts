@@ -39,7 +39,20 @@ export async function timeRoutes(req: Request, ctx: RequestContext): Promise<Res
   }
 
   if (req.method === 'POST' && url.pathname === '/v1/time/idle') {
-    await writeAudit({ workspaceId: ctx.workspaceId, actorUserId: ctx.userId, action: 'idle.detected', targetType: 'user', targetId: ctx.userId });
+    const body = (await readJson(req)) as { keystrokes?: number; mouseMovement?: number; clicks?: number };
+    await writeAudit({ 
+      workspaceId: ctx.workspaceId, 
+      actorUserId: ctx.userId, 
+      action: 'idle.detected', 
+      targetType: 'user', 
+      targetId: ctx.userId, 
+      metadata: {
+        reason: 'user_inactivity',
+        keystrokes: body.keystrokes || 0,
+        mouseMovementPixels: body.mouseMovement || 0,
+        clicks: body.clicks || 0
+      }
+    });
     
     const policy = await getPolicy(ctx.workspaceId);
     let autoPaused = false;

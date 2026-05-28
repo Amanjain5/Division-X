@@ -7,6 +7,8 @@ export async function writeAudit(params: {
   targetType: string;
   targetId?: string;
   metadata?: unknown;
+  clientIp?: string;
+  userAgent?: string;
 }) {
   await prisma.auditLog.create({
     data: {
@@ -15,7 +17,9 @@ export async function writeAudit(params: {
       action: params.action,
       targetType: params.targetType,
       targetId: params.targetId,
-      metadata: params.metadata ? JSON.stringify(params.metadata) : null
+      metadata: params.metadata ? (params.metadata as any) : null,
+      clientIp: params.clientIp || '127.0.0.1',
+      userAgent: params.userAgent || 'Unknown'
     }
   });
 }
