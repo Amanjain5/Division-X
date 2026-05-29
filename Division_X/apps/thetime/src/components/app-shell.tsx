@@ -32,8 +32,23 @@ export function AppShell({ title, children }: { title: string; children: React.R
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('thetime_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+  const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('thetime_sidebar_collapsed', String(isCollapsed));
+    }
+  }, [isCollapsed]);
+
   useEffect(() => {
     setPendingHref(null);
+    setIsMobileOpen(false); // Close mobile drawer when route changes!
   }, [pathname]);
 
   useEffect(() => {
@@ -179,6 +194,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
         onFocus={() => prefetchRoute(href)}
         className={navClass(href)}
         aria-current={pathname === href ? 'page' : undefined}
+        title={isCollapsed ? name : undefined}
       >
         <span style={{ fontSize: '0.95rem', width: 20, textAlign: 'center' }}>{icon}</span>
         <span>{name}</span>
@@ -189,13 +205,49 @@ export function AppShell({ title, children }: { title: string; children: React.R
   return (
     <AuthGuard>
       <div className="app-layout">
+        {/* Mobile Header Bar */}
+        <header className="mobile-header">
+          <button className="mobile-menu-toggle" onClick={() => setIsMobileOpen(true)} aria-label="Open menu">
+            ☰
+          </button>
+          <div className="mobile-header-title">
+            <span>⏰</span>
+            <span>TheTime</span>
+          </div>
+          <div style={{ width: 36 }} />
+        </header>
+
+        {/* Sidebar Slide-out Backdrop Overlay */}
+        {isMobileOpen && <div className="sidebar-overlay" onClick={() => setIsMobileOpen(false)} />}
+
         {pendingHref && <div className="route-progress" />}
-        <aside className="sidebar">
-          <div className="sidebar-header">
+        
+        <aside className={`sidebar ${isCollapsed ? 'sidebar-collapsed' : ''} ${isMobileOpen ? 'sidebar-mobile-open' : ''}`}>
+          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit' }}>
               <span style={{ fontSize: '1.2rem' }}>⏰</span>
-              <span>TheTime</span>
+              {!isCollapsed && <span>TheTime</span>}
             </Link>
+            
+            {/* Desktop Collapse Trigger */}
+            <button 
+              className="sidebar-toggle-btn"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              aria-label={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isCollapsed ? '▶' : '◀'}
+            </button>
+
+            {/* Mobile Drawer Close Trigger */}
+            <button 
+              className="sidebar-close-btn"
+              onClick={() => setIsMobileOpen(false)}
+              title="Close Menu"
+              aria-label="Close Menu"
+            >
+              ✕
+            </button>
           </div>
 
           {/* Role badge */}

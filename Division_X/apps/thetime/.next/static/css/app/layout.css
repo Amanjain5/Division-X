@@ -1588,15 +1588,51 @@ a { text-decoration: none; color: inherit; }
 
 @media (max-width: 1180px) {
   .timesheet-scheduler {
-    grid-template-columns: 220px minmax(560px, 1fr);
+    grid-template-columns: 220px 1fr !important;
   }
 
   .event-detail-panel {
-    display: none;
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 380px !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    z-index: 1200 !important;
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.98), rgba(1, 26, 19, 0.98)) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-left: 1px solid var(--border-light) !important;
+    box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6) !important;
+    padding: 20px !important;
+    overflow-y: auto !important;
+    animation: detailPanelFade 0.24s ease both !important;
+  }
+  
+  .event-detail-card {
+    position: relative !important;
+    top: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-height: none !important;
+    padding: 12px 6px !important;
+    overflow: visible !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    animation: detailCardSlide 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both !important;
+  }
+
+  .event-close-button {
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 10;
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1024px) {
   .main-content {
     padding: 18px;
   }
@@ -1857,7 +1893,7 @@ a { text-decoration: none; color: inherit; }
   color: var(--text-muted);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1024px) {
   .timesheet-side-panel {
     border-bottom-color: var(--border-light);
   }
@@ -2056,4 +2092,563 @@ a { text-decoration: none; color: inherit; }
     opacity: 0;
   }
 }
+
+/* --- Collapsible Sidebar & Layout Styles --- */
+.sidebar {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.sidebar-collapsed {
+  width: 72px;
+}
+.sidebar.sidebar-collapsed .sidebar-header {
+  padding: 24px 10px;
+}
+.sidebar.sidebar-collapsed .sidebar-header span:last-child,
+.sidebar.sidebar-collapsed .badge,
+.sidebar.sidebar-collapsed select,
+.sidebar.sidebar-collapsed .nav-section-label,
+.sidebar.sidebar-collapsed .select-sidebar,
+.sidebar.sidebar-collapsed .nav-link span:last-child,
+.sidebar.sidebar-collapsed div[style*="overflow: hidden"],
+.sidebar.sidebar-collapsed .sidebar-close-btn,
+.sidebar.sidebar-collapsed button[title="Logout"] {
+  display: none !important;
+}
+.sidebar.sidebar-collapsed .nav-link {
+  justify-content: center;
+  padding: 10px;
+}
+.sidebar.sidebar-collapsed .nav-link span:first-child {
+  font-size: 1.15rem;
+  margin-right: 0 !important;
+  width: auto;
+}
+
+/* Sidebar Toggle Buttons */
+.sidebar-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.sidebar-toggle-btn:hover {
+  background: var(--bg-glass-hover);
+  color: var(--primary);
+}
+
+.sidebar-close-btn {
+  display: none;
+}
+
+/* --- Mobile Layout & Header Styles --- */
+.mobile-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  background: rgba(1, 26, 19, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-light);
+  padding: 0 16px;
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 900;
+}
+.mobile-menu-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-light);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-menu-toggle:hover {
+  background: var(--bg-glass-hover);
+}
+.mobile-header-title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 950;
+  animation: detailPanelFade 0.24s ease both;
+}
+
+/* Tablet & Mobile Views (< 1024px) */
+@media (max-width: 1024px) {
+  .app-layout {
+    flex-direction: column;
+  }
+  .mobile-header {
+    display: flex;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -260px;
+    z-index: 1000;
+    width: 250px;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.5);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sidebar.sidebar-mobile-open {
+    left: 0;
+  }
+  .sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+  }
+  .sidebar-close-btn:hover {
+    color: var(--text-light);
+    background: var(--bg-glass-hover);
+  }
+  .sidebar .sidebar-toggle-btn {
+    display: none !important;
+  }
+  .main-content {
+    height: calc(100vh - 56px);
+    padding: 20px;
+  }
+}
+/* Premium Adaptive Refinements (< 768px Viewports) */
+@media (max-width: 768px) {
+  /* --- 1. Root Fluid Typography Scale --- */
+  html {
+    font-size: 14px !important; /* Systematically downscales all rem units (paddings, margins, sizes) by 12.5% to avoid overlaps */
+  }
+  
+  /* Heading sizes downscaling to fit screens cleanly */
+  h1, .h1 { font-size: 1.45rem !important; }
+  h2, .h2 { font-size: 1.25rem !important; }
+  h3, .h3 { font-size: 1.12rem !important; }
+  h4, .h4 { font-size: 1rem !important; }
+  
+  .page-title {
+    font-size: 1.35rem !important;
+    word-break: break-word;
+  }
+  
+  .stat-value {
+    font-size: 1.45rem !important;
+  }
+  
+  .stat-block-value {
+    font-size: 1.8rem !important;
+  }
+
+  /* --- 2. Structural & Layout Alignment --- */
+  .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+  .page-header .btn,
+  .page-header select,
+  .page-header input,
+  .page-header div {
+    width: 100% !important;
+  }
+  
+  /* Reset fixed heights and snug padding on mobile cards */
+  .card {
+    padding: 16px !important;
+    height: auto !important;
+  }
+  .card.mb-6, .mb-6 {
+    margin-bottom: 16px !important;
+  }
+
+  /* Button alignment adjustments */
+  .btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    width: auto;
+  }
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .btn-group .btn {
+    width: 100% !important;
+  }
+
+  /* --- 3. Robust Localized Table Scrolling --- */
+  .table-responsive,
+  .table-wrapper,
+  div[style*="overflow-x: auto"],
+  div:has(> table) {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin-bottom: 16px !important;
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border-light) !important;
+  }
+  table {
+    min-width: 600px !important;
+  }
+  th, td {
+    white-space: nowrap !important;
+    padding: 10px 14px !important;
+  }
+
+  /* --- 4. Kanban Swiping Scroll --- */
+  .kanban-board,
+  div[style*="display: flex; gap: 20px"],
+  div[style*="display: flex; gap: 16px"] {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .kanban-column,
+  div[style*="flex: 1; min-width: 280px"],
+  div[style*="width: 280px"] {
+    width: 280px !important;
+    flex-shrink: 0 !important;
+    scroll-snap-align: start;
+  }
+  
+  /* --- 5. Active Timer Banner Stacking --- */
+  div[style*="display: flex; align-items: center; justify-content: space-between; padding: 20px 24px"],
+  div[style*="display: flex; align-items: center; gap: 24px"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 16px !important;
+  }
+  
+  div[style*="font-size: 2.2rem"] {
+    text-align: center;
+    font-size: 1.8rem !important;
+  }
+  
+  /* --- 6. Productivity HUD Stacks --- */
+  .hud-stats,
+  div[style*="display: flex; gap: 24px; margin-top: 14px"] {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* --- 7. Swipeable Settings Tab Bar --- */
+  div[style*="display: grid; grid-template-columns: 200px 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+  
+  div[style*="border-right: 1px solid var(--border-light)"] {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-light) !important;
+    padding-bottom: 16px;
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 10px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* --- 8. Vertical Column-Grid Timesheet Calendar --- */
+  .week-scheduler {
+    grid-template-columns: 1fr !important;
+    overflow-x: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  .week-columns {
+    grid-template-columns: 1fr !important;
+    min-width: 0 !important;
+    gap: 16px !important;
+    padding: 4px !important;
+  }
+
+  /* --- 9. Swipeable Daily Barcode Heatmaps --- */
+  div[style*="padding: 10px 0 25px 0"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 25px !important;
+  }
+  div[style*="height: 36px"] {
+    min-width: 650px !important; /* Ensures active/break intervals are readable and hoverable */
+  }
+
+  /* --- 10. Floating Toast Notifications --- */
+  .toast {
+    left: 16px !important;
+    right: 16px !important;
+    width: auto !important;
+    max-width: none !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45) !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  /* --- 11. Timesheet Collapsible Mobile Toggle --- */
+  .sidebar-mobile-toggle-btn {
+    display: none;
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .sidebar-mobile-toggle-btn:hover {
+    background: var(--bg-glass-hover);
+    color: var(--primary-hover);
+    border-color: var(--border-glow);
+  }
+  .sidebar-mobile-toggle-btn:active {
+    transform: scale(0.98);
+  }
+
+  /* Collapsible Container animations */
+  .sidebar-collapsible-content {
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+  }
+  .sidebar-collapsible-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin-top: 0;
+  }
+  .sidebar-collapsible-content.expanded {
+    max-height: 1000px;
+    opacity: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 14px;
+  }
+
+  .sidebar-mobile-toggle-btn {
+    display: flex !important;
+  }
+
+  /* --- 12. Stacked Timesheet Metrics --- */
+  .scheduler-metrics {
+    grid-template-columns: 1fr !important; /* Stack metrics one by one */
+    gap: 12px !important;
+    padding: 14px 20px !important;
+    margin-bottom: 8px;
+  }
+  .scheduler-metrics div {
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
+  }
+  .scheduler-metrics strong {
+    font-size: 1rem !important;
+  }
+  .scheduler-metrics span {
+    font-size: 0.74rem !important;
+    line-height: 1.3 !important;
+  }
+
+  /* --- 13. Stacked Action Controls & Navigation --- */
+  .scheduler-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 18px !important;
+    padding: 22px 20px 14px !important;
+  }
+  .scheduler-actions {
+    width: 100% !important;
+    gap: 10px !important;
+    display: flex !important;
+    flex-direction: column !important; /* Stack buttons vertically one by one */
+    align-items: stretch !important;
+  }
+  .scheduler-actions .scheduler-segmented {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important; /* Stack view selectors vertically one by one */
+    gap: 6px !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .scheduler-actions .scheduler-segmented button {
+    width: 100% !important;
+    padding: 10px 14px !important;
+    background: var(--bg-glass) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 9px !important;
+    color: var(--text-muted) !important;
+    font-size: 0.78rem !important;
+  }
+  .scheduler-actions .scheduler-segmented button.active {
+    background: linear-gradient(135deg, var(--primary), #059669) !important;
+    color: #022c22 !important;
+    border-color: transparent !important;
+  }
+  .scheduler-actions .scheduler-tool-button,
+  .scheduler-actions .scheduler-icon-button {
+    width: 100% !important;
+    min-height: 40px !important;
+    justify-content: center !important;
+    padding: 10px 14px !important;
+    font-size: 0.78rem !important;
+  }
+  .scheduler-tabs {
+    grid-template-columns: 1fr !important; /* Stack side-panel tabs vertically one by one */
+    gap: 8px !important;
+    padding: 14px 0 !important;
+  }
+  .scheduler-tabs button {
+    width: 100% !important;
+    padding: 12px 10px !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* --- 14. Mobile Column-Grid Day Overrides --- */
+  .time-axis {
+    display: none !important; /* Hide hour axis in a vertical stacked grid */
+  }
+  
+  .day-column {
+    border: 1px solid var(--border-light) !important;
+    border-radius: var(--radius-lg) !important;
+    background: var(--bg-card) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    box-shadow: var(--shadow-sm) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-self: stretch !important;
+  }
+  
+  .day-header {
+    height: auto !important;
+    padding: 14px 18px !important;
+    border-bottom: 1px solid var(--border-light) !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  
+  .day-header span {
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+  }
+  
+  .day-header strong {
+    margin-top: 0 !important;
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.9rem !important;
+  }
+  
+  .hour-row {
+    display: none !important; /* Collapse empty slot background grid lines */
+  }
+  
+  .event-layer {
+    position: relative !important;
+    inset: auto !important;
+    height: auto !important;
+    padding: 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    overflow: visible !important;
+  }
+  
+  .event-cluster {
+    position: relative !important;
+    inset: auto !important;
+    height: auto !important;
+    width: 100% !important;
+    display: block !important;
+  }
+  
+  .calendar-event {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    width: 100% !important;
+    padding: 12px 14px !important;
+    border-radius: var(--radius-md) !important;
+    border-left-width: 4px !important;
+  }
+
+  /* --- 15. Mobile Drawer Overlay Adjustment --- */
+  .event-detail-panel {
+    width: 100% !important;
+    max-width: 100vw !important;
+    border-left: none !important;
+  }
+
+  /* --- 16. Responsive Weekday Labels --- */
+  .weekday-long {
+    display: block !important; /* Keep full weekday names in mobile column cards */
+  }
+  .weekday-short {
+    display: none !important;
+  }
+}
+
+/* Tablet & Mobile Layout overrides for Activity Monitoring split-screen */
+@media (max-width: 1024px) {
+  .activity-layout-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+
+
 

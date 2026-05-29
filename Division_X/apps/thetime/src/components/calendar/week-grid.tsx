@@ -120,7 +120,10 @@ export function WeekGrid({
               <div
                 className="day-header"
               >
-                <span>{day.toLocaleDateString('en-US', { weekday: 'long' })}</span>
+                <span>
+                  <span className="weekday-long">{day.toLocaleDateString('en-US', { weekday: 'long' })}</span>
+                  <span className="weekday-short" style={{ display: 'none' }}>{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                </span>
                 <strong>{day.getDate()}</strong>
               </div>
 

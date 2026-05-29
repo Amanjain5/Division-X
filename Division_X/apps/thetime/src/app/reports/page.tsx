@@ -216,22 +216,26 @@ export default function ReportsPage() {
       {/* Entries Table */}
       <div className="card">
         <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem' }}>Entries</h3>
-        <div className="list-header" style={{ gridTemplateColumns: '2fr 1fr 80px 80px 80px' }}>
-          <span>Description</span><span>Duration</span><span>Billable</span><span>Approved</span><span>Date</span>
-        </div>
-        {items.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No entries match your filters</div>}
-        {items.map((i: any) => (
-          <div key={i.id} className="list-row" style={{ gridTemplateColumns: '2fr 1fr 80px 80px 80px' }}>
-            <div>
-              <strong style={{ fontWeight: 500 }}>{i.description}</strong>
-              {i.projectName && <span style={{ fontSize: '0.8rem', color: 'var(--primary)', marginLeft: 8 }}>● {i.projectName}</span>}
-            </div>
-            <span style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{i.durationHours}h</span>
-            <span><span className={`badge ${i.billable ? 'badge-success' : 'badge-neutral'}`}>{i.billable ? '✓' : '–'}</span></span>
-            <span><span className={`badge ${i.approved ? 'badge-success' : 'badge-warning'}`}>{i.approved ? '✓' : '○'}</span></span>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{new Date(i.startedAt).toLocaleDateString()}</span>
+        <div className="table-responsive" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
+          <div className="list-header" style={{ gridTemplateColumns: '2fr 1fr 80px 80px 80px', minWidth: '700px' }}>
+            <span>Description</span><span>Duration</span><span>Billable</span><span>Approved</span><span>Date</span>
           </div>
-        ))}
+          {items.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No entries match your filters</div>}
+          <div className="table-body" style={{ minWidth: '700px' }}>
+            {items.map((i: any) => (
+              <div key={i.id} className="list-row" style={{ gridTemplateColumns: '2fr 1fr 80px 80px 80px' }}>
+                <div>
+                  <strong style={{ fontWeight: 500 }}>{i.description}</strong>
+                  {i.projectName && <span style={{ fontSize: '0.8rem', color: 'var(--primary)', marginLeft: 8 }}>● {i.projectName}</span>}
+                </div>
+                <span style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{i.durationHours}h</span>
+                <span><span className={`badge ${i.billable ? 'badge-success' : 'badge-neutral'}`}>{i.billable ? '✓' : '–'}</span></span>
+                <span><span className={`badge ${i.approved ? 'badge-success' : 'badge-warning'}`}>{i.approved ? '✓' : '○'}</span></span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{new Date(i.startedAt).toLocaleDateString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="mt-4"><PaginationBar page={page} total={total} pageSize={20} onPrev={() => setPage((p) => p - 1)} onNext={() => setPage((p) => p + 1)} /></div>
       </div>
       <Toast message={toast?.text || ''} type={toast?.type || 'success'} onClose={() => setToast(null)} />

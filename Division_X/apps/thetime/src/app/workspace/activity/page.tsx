@@ -338,7 +338,7 @@ export default function ActivityMonitoringPage() {
         </div>
 
         {/* ── Main Layout: 2 Columns ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', flexGrow: 1, minHeight: 0 }}>
+        <div className="activity-layout-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', flexGrow: 1, minHeight: 0 }}>
           
           {/* Left Column: Team Grid & Focus Timelines */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>

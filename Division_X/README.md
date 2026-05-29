@@ -10,6 +10,13 @@ Multi-brand monorepo scaffold for apps, services, shared packages, and infrastru
 - `domains/` contains domain-aligned code boundaries and internal modules
 - `infra/`, `database/`, `env/`, and `docs/` contain infrastructure, environment configuration, database schema, and architecture documentation
 
+## Product documentation
+
+- `docs/products/thetime.md` — TheTime frontend architecture, routes, and features
+- `docs/services/core-api.md` — core-api backend architecture, endpoints, and data model
+- `docs/architecture/thetime-core-api-dataflow.md` — end-to-end workflows and data flow
+- `docs/thetime-core-api-master.md` — combined master document (frontend + backend + data flow)
+
 ## Getting started
 
 1. Install dependencies:
