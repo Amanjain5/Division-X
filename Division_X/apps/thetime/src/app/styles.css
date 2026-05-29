@@ -475,7 +475,10 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 48px;
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: 20px;
+  padding-left: calc(48px + env(safe-area-inset-left, 0px));
+  padding-right: calc(48px + env(safe-area-inset-right, 0px));
   position: fixed;
   top: 0;
   left: 0;
@@ -507,7 +510,10 @@ a { text-decoration: none; color: inherit; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 140px 24px 80px;
+  padding-top: calc(140px + env(safe-area-inset-top, 0px));
+  padding-bottom: 80px;
+  padding-left: 24px;
+  padding-right: 24px;
   text-align: center;
   color: white;
   overflow: hidden;
@@ -880,9 +886,19 @@ a { text-decoration: none; color: inherit; }
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  .landing-nav { padding: 16px 20px; }
+  .landing-nav {
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    padding-bottom: 16px;
+    padding-left: calc(20px + env(safe-area-inset-left, 0px));
+    padding-right: calc(20px + env(safe-area-inset-right, 0px));
+  }
   .landing-nav-links { display: none; }
-  .hero-section { padding: 120px 20px 60px; }
+  .hero-section {
+    padding-top: calc(120px + env(safe-area-inset-top, 0px));
+    padding-bottom: 60px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
   .hero-dash-inner { flex-direction: column; }
   .dash-sidebar-mock { width: 100%; flex-direction: row; overflow-x: auto; gap: 8px; padding: 12px; }
   .steps-grid { flex-direction: column; gap: 16px; }
