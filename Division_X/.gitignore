@@ -18,6 +18,12 @@ build/
 out/
 **/out/
 next-env.d.ts
+# Generated PWA Service Workers
+**/public/sw.js
+**/public/sw.js.map
+**/public/workbox-*.js
+**/public/workbox-*.js.map
+**/public/fallback-*.js
 
 # ═══ Turborepo & Build Engines ═══
 .turbo/

@@ -2187,6 +2187,9 @@ a { text-decoration: none; color: inherit; }
   }
   .mobile-header {
     display: flex;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    box-sizing: content-box !important;
   }
   .sidebar {
     position: fixed;
@@ -2196,6 +2199,8 @@ a { text-decoration: none; color: inherit; }
     width: 250px;
     box-shadow: 8px 0 24px rgba(0, 0, 0, 0.5);
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
   .sidebar.sidebar-mobile-open {
     left: 0;
@@ -2220,8 +2225,9 @@ a { text-decoration: none; color: inherit; }
     display: none !important;
   }
   .main-content {
-    height: calc(100vh - 56px);
-    padding: 20px;
+    height: calc(100vh - 56px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+    padding: 20px !important;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 /* Premium Adaptive Refinements (< 768px Viewports) */
@@ -2610,6 +2616,9 @@ a { text-decoration: none; color: inherit; }
     width: 100% !important;
     max-width: 100vw !important;
     border-left: none !important;
+    padding-top: calc(20px + env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+    height: 100vh !important;
   }
 
   /* --- 16. Responsive Weekday Labels --- */

@@ -1,8 +1,5 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
   "/tracker/page": "app/tracker/page.js",
-  "/timesheet/page": "app/timesheet/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/reports/page": "app/reports/page.js",
-  "/workspace/activity/page": "app/workspace/activity/page.js"
+  "/timesheet/page": "app/timesheet/page.js"
 }

@@ -1,0 +1,40 @@
+{
+  "name": "TheTime Productivity Dashboard",
+  "short_name": "TheTime",
+  "description": "Enterprise-grade time tracking, activity forensics, and real-time team analytics platform.",
+  "categories": ["productivity", "utilities", "business"],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#052e21",
+  "theme_color": "#0a3d2e",
+  "dir": "ltr",
+  "lang": "en-US",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
