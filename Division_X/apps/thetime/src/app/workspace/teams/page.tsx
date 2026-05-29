@@ -14,6 +14,8 @@ export default function TeamsPage() {
   const role = typeof window !== 'undefined' ? getCurrentRole() : 'MEMBER';
   const isAdmin = ['OWNER', 'ADMIN'].includes(role);
   const isManager = ['OWNER', 'ADMIN', 'MANAGER'].includes(role);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionType, setActionType] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -27,24 +29,68 @@ export default function TeamsPage() {
   const activeMap = new Map(activeTimers.map((t: any) => [t.userId, t]));
 
   async function sendInvite() {
-    if (!inviteEmail.trim()) return;
-    try { await createInvite({ email: inviteEmail, role: inviteRole }); setToast({ text: `Invite sent to ${inviteEmail}`, type: 'success' }); setInviteEmail(''); await refresh(); }
-    catch { setToast({ text: 'Failed to send invite', type: 'error' }); }
+    if (!inviteEmail.trim() || actionPending) return;
+    setActionPending(true);
+    setActionType('invite');
+    try { 
+      await createInvite({ email: inviteEmail, role: inviteRole }); 
+      setToast({ text: `Invite sent to ${inviteEmail}`, type: 'success' }); 
+      setInviteEmail(''); 
+      await refresh(); 
+    } catch { 
+      setToast({ text: 'Failed to send invite', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   async function onRoleChange(userId: string, newRole: string) {
-    try { await changeMemberRole(userId, newRole); await refresh(); setToast({ text: 'Role updated', type: 'success' }); }
-    catch { setToast({ text: 'Failed to change role', type: 'error' }); }
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`role-${userId}`);
+    try { 
+      await changeMemberRole(userId, newRole); 
+      await refresh(); 
+      setToast({ text: 'Role updated', type: 'success' }); 
+    } catch { 
+      setToast({ text: 'Failed to change role', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   async function onRemove(userId: string) {
-    try { await removeMember(userId); await refresh(); setToast({ text: 'Member removed', type: 'success' }); }
-    catch { setToast({ text: 'Failed to remove', type: 'error' }); }
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`remove-${userId}`);
+    try { 
+      await removeMember(userId); 
+      await refresh(); 
+      setToast({ text: 'Member removed', type: 'success' }); 
+    } catch { 
+      setToast({ text: 'Failed to remove', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   async function onStopTimer(userId: string) {
-    try { await stopMemberTimer(userId); await refresh(); setToast({ text: 'Timer stopped', type: 'success' }); }
-    catch { setToast({ text: 'Failed to stop', type: 'error' }); }
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`stop-${userId}`);
+    try { 
+      await stopMemberTimer(userId); 
+      await refresh(); 
+      setToast({ text: 'Timer stopped', type: 'success' }); 
+    } catch { 
+      setToast({ text: 'Failed to stop', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   return (
@@ -54,15 +100,18 @@ export default function TeamsPage() {
         <div className="card mb-6" style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="input-group">
             <label className="label">Email Address</label>
-            <input className="input" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com" />
+            <input className="input" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com" disabled={actionPending} />
           </div>
           <div className="input-group">
             <label className="label">Role</label>
-            <select className="select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as any)}>
+            <select className="select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as any)} disabled={actionPending}>
               <option value="MEMBER">Member</option><option value="MANAGER">Manager</option><option value="ADMIN">Admin</option><option value="OWNER">Owner</option>
             </select>
           </div>
-          <button className="btn btn-primary" onClick={sendInvite}>Send Invite</button>
+          <button className="btn btn-primary" onClick={sendInvite} disabled={actionPending}>
+            {actionType === 'invite' ? <span className="spinner" /> : ''}
+            Send Invite
+          </button>
         </div>
       )}
 
@@ -79,7 +128,7 @@ export default function TeamsPage() {
               <strong style={{ fontWeight: 500 }}>{m.name || m.email.split('@')[0]}</strong>
               <span style={{ color: 'var(--text-muted)' }}>{m.email}</span>
               {isAdmin ? (
-                <select className="select select-sm" value={m.role} onChange={(e) => onRoleChange(m.id, e.target.value)}>
+                <select className="select select-sm" value={m.role} onChange={(e) => onRoleChange(m.id, e.target.value)} disabled={actionPending}>
                   <option value="MEMBER">Member</option><option value="MANAGER">Manager</option><option value="ADMIN">Admin</option><option value="OWNER">Owner</option>
                 </select>
               ) : (
@@ -92,10 +141,20 @@ export default function TeamsPage() {
                   <span className="badge badge-neutral">Idle</span>
                 )}
               </span>
-              {isManager && timer && <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => onStopTimer(m.id)}>Stop Timer</button>}
-              {!timer && <span />}
-              {isAdmin && <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem', color: '#DC2626' }} onClick={() => onRemove(m.id)}>Remove</button>}
-              {!isAdmin && <span />}
+              {isManager && timer ? (
+                <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => onStopTimer(m.id)} disabled={actionPending}>
+                  {actionType === `stop-${m.id}` ? <span className="spinner" style={{ marginRight: 0 }} /> : 'Stop Timer'}
+                </button>
+              ) : (
+                <span />
+              )}
+              {isAdmin ? (
+                <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem', color: '#DC2626' }} onClick={() => onRemove(m.id)} disabled={actionPending}>
+                  {actionType === `remove-${m.id}` ? <span className="spinner" style={{ marginRight: 0 }} /> : 'Remove'}
+                </button>
+              ) : (
+                <span />
+              )}
             </div>
           );
         })}

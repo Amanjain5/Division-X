@@ -31,6 +31,8 @@ interface ActiveTimerBannerProps {
   totalBreakMs: number;
   toggleBreak: () => void;
   onStop: () => void;
+  actionPending: boolean;
+  actionType: string | null;
 }
 
 function ActiveTimerBanner({
@@ -40,6 +42,8 @@ function ActiveTimerBanner({
   totalBreakMs,
   toggleBreak,
   onStop,
+  actionPending,
+  actionType,
 }: ActiveTimerBannerProps) {
   const [elapsed, setElapsed] = useState('00:00:00');
 
@@ -76,8 +80,23 @@ function ActiveTimerBanner({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, color: onBreak ? '#F59E0B' : 'white' }}>{frozenElapsed || elapsed}</div>
-          <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.85rem' }} onClick={toggleBreak}>{onBreak ? '☕ End Break' : '☕ Break'}</button>
-          <button className="btn btn-danger" onClick={onStop}>■ Stop</button>
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '6px 10px', fontSize: '0.85rem' }} 
+            onClick={toggleBreak}
+            disabled={actionPending}
+          >
+            {actionType === 'break' ? <span className="spinner" /> : '☕ '}
+            {onBreak ? 'End Break' : 'Break'}
+          </button>
+          <button 
+            className="btn btn-danger" 
+            onClick={onStop}
+            disabled={actionPending}
+          >
+            {actionType === 'stop' ? <span className="spinner" /> : '■ '}
+            Stop
+          </button>
         </div>
       </div>
     </div>
@@ -220,6 +239,8 @@ export default function TrackerPage() {
   const [running, setRunning] = useState<any | null>(null);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const role = typeof window !== 'undefined' ? getCurrentRole() : 'MEMBER';
+  const [actionPending, setActionPending] = useState(false);
+  const [actionType, setActionType] = useState<string | null>(null);
 
   // Pomodoro state
   const [mode, setMode] = useState<Mode>('timer');
@@ -428,10 +449,11 @@ export default function TrackerPage() {
   // Keyboard shortcut
   useEffect(() => {
     function handler(e: KeyboardEvent) {
+      if (actionPending) return;
       if (e.altKey && e.key === 's') {
         e.preventDefault();
-        if (running) { stopTimer().then(refresh); }
-        else { startTimer({ description: description || 'Quick start', projectId: projectId || undefined, billable }).then(() => { setDescription(''); refresh(); }); }
+        if (running) { onStop(); }
+        else { onStartManualTimer(); }
       }
       if (e.altKey && e.key === 'b') {
         e.preventDefault();
@@ -444,17 +466,44 @@ export default function TrackerPage() {
     }
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [running, description, projectId, billable, refresh, onBreak, pomodoroActive]);
+  }, [running, description, projectId, billable, refresh, onBreak, pomodoroActive, actionPending]);
+
+  async function onStartManualTimer() {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType('stop');
+    try {
+      await startTimer({ description: description || 'Quick start', projectId: projectId || undefined, billable });
+      setDescription('');
+      await refresh();
+    } catch {
+      setToast({ text: 'Failed to start timer', type: 'error' });
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
+  }
 
   async function onStartTask(task: any) {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`start-task-${task.id}`);
     try {
       await startTimer({ description: task.name, taskId: task.id, projectId: task.projectId || undefined, billable });
       await refresh();
-    } catch { setToast({ text: 'Failed to start task timer', type: 'error' }); }
+    } catch { 
+      setToast({ text: 'Failed to start task timer', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   async function onAddTask() {
     if (!newTaskName.trim()) return;
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType('add-task');
     try {
       await createCatalog('tasks', { name: newTaskName, status: 'To Do', priority: newTaskPriority, projectId: newTaskProject || undefined });
       setNewTaskName('');
@@ -463,7 +512,12 @@ export default function TrackerPage() {
       setShowNewTask(false);
       await reloadTasks();
       setToast({ text: 'Task created', type: 'success' });
-    } catch { setToast({ text: 'Failed to create task', type: 'error' }); }
+    } catch { 
+      setToast({ text: 'Failed to create task', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   const filteredTasks = useMemo(() => {
@@ -488,6 +542,7 @@ export default function TrackerPage() {
     return formatDuration(ms);
   }
 
+  // Kanban drag starts
   function handleDragStart(e: React.DragEvent, taskId: string) {
     setDraggedTaskId(taskId);
     e.dataTransfer.setData('text/plain', taskId);
@@ -508,25 +563,42 @@ export default function TrackerPage() {
     
     setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
     
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType('drop-task');
     try {
       await updateCatalog('tasks', taskId, { status });
       await reloadTasks();
     } catch {
       setToast({ text: 'Failed to update task status', type: 'error' });
       await reloadTasks();
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
   async function onStop() {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType('stop');
     try {
       await stopTimer();
       setPomodoroActive(false);
       setOnBreak(false);
       await refresh();
-    } catch { setToast({ text: 'Failed to stop timer', type: 'error' }); }
+    } catch { 
+      setToast({ text: 'Failed to stop timer', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
   async function toggleBreak() {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType('break');
     try {
       if (onBreak) {
         totalBreakMsRef.current += Date.now() - breakStartRef.current;
@@ -539,23 +611,39 @@ export default function TrackerPage() {
         setOnBreak(true);
         setToast({ text: 'Break started', type: 'success' });
       }
-    } catch { setToast({ text: 'Break action failed', type: 'error' }); }
+    } catch { 
+      setToast({ text: 'Break action failed', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
+    }
   }
 
-  function togglePomodoro() {
-    if (pomodoroActive) {
-      setPomodoroActive(false);
-      setPomodoroPhase('focus');
-      setPomodoroStartTime(null);
-      stopBreak().catch(() => {});
-      setOnBreak(false);
-    } else {
-      setPomodoroActive(true);
-      setPomodoroPhase('focus');
-      setPomodoroStartTime(Date.now());
-      if (!running) {
-        startTimer({ description: description || '🍅 Pomodoro Focus', projectId: projectId || undefined, billable }).then(refresh).catch(() => {});
+  async function togglePomodoro() {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType('pomodoro');
+    try {
+      if (pomodoroActive) {
+        setPomodoroActive(false);
+        setPomodoroPhase('focus');
+        setPomodoroStartTime(null);
+        await stopBreak().catch(() => {});
+        setOnBreak(false);
+      } else {
+        setPomodoroActive(true);
+        setPomodoroPhase('focus');
+        setPomodoroStartTime(Date.now());
+        if (!running) {
+          await startTimer({ description: description || '🍅 Pomodoro Focus', projectId: projectId || undefined, billable });
+          await refresh();
+        }
       }
+    } catch { 
+      setToast({ text: 'Pomodoro action failed', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
@@ -617,7 +705,11 @@ export default function TrackerPage() {
             className="btn"
             style={{ padding: '8px 16px', fontSize: '0.85rem', background: onBreak ? '#F59E0B' : 'transparent', color: onBreak ? 'white' : 'var(--text-main)', border: '1px solid var(--border-light)' }}
             onClick={toggleBreak}
-          >{onBreak ? '☕ End Break' : '☕ Take Break'}</button>
+            disabled={actionPending}
+          >
+            {actionType === 'break' ? <span className="spinner" /> : (onBreak ? '☕ ' : '☕ ')}
+            {onBreak ? 'End Break' : 'Take Break'}
+          </button>
         )}
 
         {mode === 'pomodoro' && (
@@ -632,12 +724,28 @@ export default function TrackerPage() {
                 }}>
                   {pomodoroPhase === 'focus' ? '🎯 Focus' : '☕ Break'} — {pomodoroElapsed}
                 </div>
-                <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={togglePomodoro}>Cancel</button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '6px 12px', fontSize: '0.8rem' }} 
+                  onClick={togglePomodoro}
+                  disabled={actionPending}
+                >
+                  {actionType === 'pomodoro' ? <span className="spinner" /> : ''}
+                  Cancel
+                </button>
               </>
             ) : (
               <>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{pomodoroFocus}m focus / {pomodoroBreak}m break</span>
-                <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={togglePomodoro}>Start Pomodoro</button>
+                <button 
+                  className="btn btn-primary" 
+                  style={{ padding: '8px 16px', fontSize: '0.85rem' }} 
+                  onClick={togglePomodoro}
+                  disabled={actionPending}
+                >
+                  {actionType === 'pomodoro' ? <span className="spinner" /> : ''}
+                  Start Pomodoro
+                </button>
               </>
             )}
           </div>
@@ -655,6 +763,8 @@ export default function TrackerPage() {
         totalBreakMs={totalBreakMsRef.current}
         toggleBreak={toggleBreak}
         onStop={onStop}
+        actionPending={actionPending}
+        actionType={actionType}
       />
 
       <LiveForensicsHUD
@@ -698,8 +808,15 @@ export default function TrackerPage() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                  <button className="btn btn-secondary" onClick={() => setShowNewTask(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={onAddTask}>Create Task</button>
+                  <button className="btn btn-secondary" onClick={() => setShowNewTask(false)} disabled={actionPending}>Cancel</button>
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={onAddTask}
+                    disabled={actionPending}
+                  >
+                    {actionType === 'add-task' ? <span className="spinner" /> : ''}
+                    Create Task
+                  </button>
                 </div>
               </div>
             </div>
@@ -770,11 +887,33 @@ export default function TrackerPage() {
 
                           {isActive ? (
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button className="btn btn-secondary" style={{ padding: '3px 7px', fontSize: '0.7rem' }} onClick={toggleBreak} title="Break">☕</button>
-                              <button className="btn btn-danger" style={{ padding: '3px 7px', fontSize: '0.7rem' }} onClick={onStop}>■ Stop</button>
+                              <button 
+                                className="btn btn-secondary" 
+                                style={{ padding: '3px 7px', fontSize: '0.7rem' }} 
+                                onClick={toggleBreak} 
+                                disabled={actionPending}
+                                title="Break"
+                              >
+                                {actionType === 'break' ? <span className="spinner" style={{ marginRight: 0 }} /> : '☕'}
+                              </button>
+                              <button 
+                                className="btn btn-danger" 
+                                style={{ padding: '3px 7px', fontSize: '0.7rem' }} 
+                                onClick={onStop} 
+                                disabled={actionPending}
+                              >
+                                {actionType === 'stop' ? <span className="spinner" style={{ marginRight: 0 }} /> : '■ Stop'}
+                              </button>
                             </div>
                           ) : (
-                            <button className="btn btn-primary" style={{ padding: '3px 10px', fontSize: '0.7rem' }} onClick={() => onStartTask(task)}>▶ Start</button>
+                            <button 
+                              className="btn btn-primary" 
+                              style={{ padding: '3px 10px', fontSize: '0.7rem' }} 
+                              onClick={() => onStartTask(task)}
+                              disabled={actionPending}
+                            >
+                              {actionType === `start-task-${task.id}` ? <span className="spinner" style={{ marginRight: 0 }} /> : '▶ Start'}
+                            </button>
                           )}
                         </div>
                       </div>

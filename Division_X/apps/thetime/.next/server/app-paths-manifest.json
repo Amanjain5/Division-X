@@ -1,5 +1,5 @@
 {
   "/tracker/page": "app/tracker/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/timesheet/page": "app/timesheet/page.js"
+  "/timesheet/page": "app/timesheet/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

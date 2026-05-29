@@ -30,6 +30,8 @@ export default function ProjectsPage() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
 
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionType, setActionType] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { 
@@ -47,7 +49,9 @@ export default function ProjectsPage() {
   useEffect(() => { refresh(); }, [refresh]);
 
   async function onCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || actionPending) return;
+    setActionPending(true);
+    setActionType('create');
     try { 
       await createCatalog('projects', { name, color }); 
       setName(''); 
@@ -55,10 +59,16 @@ export default function ProjectsPage() {
       setToast({ text: 'Project created successfully', type: 'success' }); 
     } catch { 
       setToast({ text: 'Failed to create project', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
   async function onUpdate(id: string) {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`update-${id}`);
     try { 
       await updateCatalog('projects', id, { name: editName }); 
       setEditId(null); 
@@ -66,21 +76,32 @@ export default function ProjectsPage() {
       setToast({ text: 'Project updated successfully', type: 'success' });
     } catch { 
       setToast({ text: 'Failed to update project', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
   async function onDelete(id: string) {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`delete-${id}`);
     try { 
       await deleteCatalog('projects', id); 
       await refresh(); 
       setToast({ text: 'Project deleted successfully', type: 'success' }); 
     } catch { 
       setToast({ text: 'Failed to delete project', type: 'error' }); 
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
   async function handleAddTeamScope(projectId: string) {
-    if (!selectedTeamId) return;
+    if (!selectedTeamId || actionPending) return;
+    setActionPending(true);
+    setActionType(`add-scope-${projectId}`);
     try {
       await bindProjectToTeam(projectId, selectedTeamId);
       setSelectedTeamId('');
@@ -89,16 +110,25 @@ export default function ProjectsPage() {
       setToast({ text: 'Team scope added to project', type: 'success' });
     } catch {
       setToast({ text: 'Failed to add team scope', type: 'error' });
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
   async function handleRemoveTeamScope(projectId: string, teamId: string) {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionType(`remove-scope-${projectId}`);
     try {
       await unbindProjectFromTeam(projectId, teamId);
       await refresh();
       setToast({ text: 'Team scope removed from project', type: 'success' });
     } catch {
       setToast({ text: 'Failed to remove team scope', type: 'error' });
+    } finally {
+      setActionType(null);
+      setActionPending(false);
     }
   }
 
@@ -115,7 +145,10 @@ export default function ProjectsPage() {
           <label className="label">Color</label>
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ width: 48, height: 40, border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }} />
         </div>
-        <button className="btn btn-primary" onClick={onCreate}>+ Add Project</button>
+        <button className="btn btn-primary" onClick={onCreate} disabled={actionPending}>
+          {actionType === 'create' ? <span className="spinner" /> : ''}
+          + Add Project
+        </button>
       </div>
 
       {/* ── Projects List ── */}
@@ -148,7 +181,7 @@ export default function ProjectsPage() {
               
               {/* Project Name & Input */}
               {editId === item.id ? (
-                <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} onBlur={() => onUpdate(item.id)} onKeyDown={(e) => { if (e.key === 'Enter') onUpdate(item.id); }} autoFocus />
+                <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} onBlur={() => onUpdate(item.id)} onKeyDown={(e) => { if (e.key === 'Enter') onUpdate(item.id); }} disabled={actionPending} autoFocus />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <strong style={{ fontWeight: 500 }}>{item.name}</strong>
@@ -178,16 +211,17 @@ export default function ProjectsPage() {
                     >
                       👥 {team.name}
                       <span
-                        onClick={() => handleRemoveTeamScope(item.id, team.id)}
+                        onClick={() => { if (!actionPending) handleRemoveTeamScope(item.id, team.id); }}
                         style={{
-                          cursor: 'pointer',
+                          cursor: actionPending ? 'not-allowed' : 'pointer',
                           color: '#FCA5A5',
                           fontWeight: 'bold',
-                          marginLeft: '2px'
+                          marginLeft: '2px',
+                          opacity: actionPending ? 0.5 : 1
                         }}
                         title="Remove Team Scope"
                       >
-                        ×
+                        {actionType === `remove-scope-${item.id}` ? '...' : '×'}
                       </span>
                     </span>
                   ))
@@ -221,20 +255,22 @@ export default function ProjectsPage() {
                       className="btn btn-primary" 
                       style={{ padding: '3px 8px', fontSize: '0.7rem' }}
                       onClick={() => handleAddTeamScope(item.id)}
+                      disabled={actionPending}
                     >
-                      Add
+                      {actionType === `add-scope-${item.id}` ? <span className="spinner" style={{ marginRight: 0 }} /> : 'Add'}
                     </button>
                     <button 
                       className="btn btn-secondary" 
                       style={{ padding: '3px 8px', fontSize: '0.7rem', color: 'var(--text-dim)' }}
                       onClick={() => setActiveScopeProjectId(null)}
+                      disabled={actionPending}
                     >
                       Cancel
                     </button>
                   </div>
                 ) : (
                   <button
-                    onClick={() => setActiveScopeProjectId(item.id)}
+                    onClick={() => { if (!actionPending) setActiveScopeProjectId(item.id); }}
                     style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       border: '1px dashed rgba(255,255,255,0.15)',
@@ -242,11 +278,12 @@ export default function ProjectsPage() {
                       borderRadius: '6px',
                       padding: '2px 8px',
                       fontSize: '0.72rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
+                      cursor: actionPending ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s',
+                      opacity: actionPending ? 0.6 : 1
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.borderColor = '#34D399'}
-                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
+                    onMouseEnter={(e) => { if (!actionPending) e.currentTarget.style.borderColor = '#34D399'; }}
+                    onMouseLeave={(e) => { if (!actionPending) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
                   >
                     + Limit Access
                   </button>
@@ -255,8 +292,10 @@ export default function ProjectsPage() {
 
               {/* Action Buttons */}
               <div /> {/* spacing grid columns */}
-              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => { setEditId(item.id); setEditName(item.name); }}>Edit</button>
-              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem', color: '#DC2626' }} onClick={() => onDelete(item.id)}>Delete</button>
+              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => { setEditId(item.id); setEditName(item.name); }} disabled={actionPending}>Edit</button>
+              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem', color: '#DC2626' }} onClick={() => onDelete(item.id)} disabled={actionPending}>
+                {actionType === `delete-${item.id}` ? <span className="spinner" style={{ marginRight: 0 }} /> : 'Delete'}
+              </button>
             
             </div>
           );
